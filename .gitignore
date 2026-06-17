@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+webhound-env/
+env/
+
+# Environment & secrets
+.env
+.env.*
+
+# Tool output
+tweb_report_*.json
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
