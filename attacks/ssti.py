@@ -12,24 +12,26 @@ console = Console()
 SSTI_PARAM_HINTS = ["name", "greeting", "message", "template", "render", "view",
                     "subject", "body", "content", "title", "query", "search", "q"]
 
+# Use large multiplication results (99980001) to avoid false positives:
+# small numbers like 49 commonly appear in HTML (CSS values, counts, etc.)
 DETECTION_PAYLOADS = [
-    ("{{7*7}}", "49"),
-    ("${7*7}", "49"),
-    ("#{7*7}", "49"),
-    ("<%= 7*7 %>", "49"),
-    ("{7*7}", "49"),
-    ("{{7*'7'}}", "7777777"),
-    ("${{7*7}}", "49"),
+    ("{{7*'7'}}", "7777777"),           # Jinja2: string multiply — most unique
+    ("{{9999*9999}}", "99980001"),      # Jinja2 / Twig
+    ("${9999*9999}", "99980001"),       # Freemarker / Mako / Velocity
+    ("#{9999*9999}", "99980001"),       # Groovy
+    ("<%= 9999*9999 %>", "99980001"),  # ERB
+    ("{9999*9999}", "99980001"),        # Smarty
+    ("${{9999*9999}}", "99980001"),
 ]
 
 ENGINE_FINGERPRINTS = {
     "Jinja2": ["{{7*'7'}}", "7777777"],
-    "Twig": ["{{7*'7'}}", "49"],
-    "Freemarker": ["${7*7}", "49"],
-    "Velocity": ["#set($x=7*7)$x", "49"],
-    "ERB": ["<%= 7*7 %>", "49"],
-    "Smarty": ["{7*7}", "49"],
-    "Mako": ["${7*7}", "49"],
+    "Twig": ["{{9999*9999}}", "99980001"],
+    "Freemarker": ["${9999*9999}", "99980001"],
+    "Velocity": ["#{9999*9999}", "99980001"],
+    "ERB": ["<%= 9999*9999 %>", "99980001"],
+    "Smarty": ["{9999*9999}", "99980001"],
+    "Mako": ["${9999*9999}", "99980001"],
 }
 
 RCE_PAYLOADS = {

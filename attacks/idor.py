@@ -3,10 +3,10 @@ IDOR / Broken Object Level Authorization attack module.
 Tests numeric ID enumeration, UUID guessing, and horizontal privilege escalation.
 """
 from __future__ import annotations
+import re
 from attacks.base import BaseAttack
 from engine.flag_hunter import has_definite_flag, extract_interesting_data
 from rich.console import Console
-import re
 
 console = Console()
 
@@ -15,6 +15,25 @@ ID_PARAM_HINTS = ["id", "user_id", "uid", "account", "profile", "order",
                   "message", "ticket", "invoice", "report"]
 
 NUMERIC_ID_RE = re.compile(r"/(\d+)(?:/|$|\?)")
+# Strip CSRF tokens and other per-request hex tokens before comparing responses
+_CSRF_RE = re.compile(r'\b[a-f0-9]{32,}\b', re.IGNORECASE)
+
+
+def _param_matches_hints(param: str, hints: list[str]) -> bool:
+    """Word-boundary-aware match: 'phpids' must NOT match hint 'id'."""
+    p = param.lower()
+    for h in hints:
+        if p == h:
+            return True
+        if p.endswith('_' + h) or p.startswith(h + '_'):
+            return True
+        if p.endswith(h) and (len(p) == len(h) or not p[-len(h) - 1].isalnum()):
+            return True
+    return False
+
+
+def _normalize(text: str) -> str:
+    return _CSRF_RE.sub('CSRF', text)
 
 
 class IDORAttack(BaseAttack):
@@ -36,7 +55,7 @@ class IDORAttack(BaseAttack):
         param = attack_point.get("param", "")
         method = attack_point.get("method", "GET")
 
-        is_id_param = param and any(hint in param.lower() for hint in ID_PARAM_HINTS)
+        is_id_param = param and _param_matches_hints(param, ID_PARAM_HINTS)
         has_numeric_id = bool(NUMERIC_ID_RE.search(url))
 
         if not is_id_param and not has_numeric_id:
@@ -70,7 +89,9 @@ class IDORAttack(BaseAttack):
                     continue
 
             if response.status_code == 200 and len(response.text) > 50:
-                if response.text != baseline_body:
+                # Normalize CSRF tokens before comparison so per-request tokens
+                # don't cause false positives on pages like security.php
+                if _normalize(response.text) != _normalize(baseline_body):
                     findings = extract_interesting_data(response.text)
                     flag = has_definite_flag(findings)
 
@@ -78,15 +99,15 @@ class IDORAttack(BaseAttack):
                         f"  [yellow][IDOR][/yellow] Different response for ID={test_id}: "
                         f"{len(response.text)} chars"
                     )
-                    findings.append({
+                    # Only add the IDOR finding, not the IP/comment noise from extract_interesting_data
+                    all_findings.append({
                         "type": "idor_different_response",
                         "value": f"IDOR @ {url} ID={test_id}: {response.text[:200]}",
                         "confidence": 0.7,
                     })
-                    all_findings.extend(findings)
-
                     if flag:
                         console.print(f"  [bold green][IDOR][/bold green] FLAG: {flag}")
+                        all_findings.extend([f for f in findings if f.get("confidence", 0) >= 1.0])
                         self.stop_event.set()
                         return all_findings
 
