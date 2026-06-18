@@ -19,6 +19,11 @@ AUTH_BYPASS_PAYLOADS_FORM = [
     {"username": {"$ne": "invalid"}, "password": {"$ne": "invalid"}},
 ]
 
+NOSQL_PARAM_HINTS = [
+    "id", "user", "email", "name", "search", "q", "query",
+    "filter", "where", "find", "match", "key", "login", "auth",
+]
+
 URL_PARAM_PAYLOADS = [
     "[$ne]=1",
     "[%24ne]=1",
@@ -39,10 +44,9 @@ class NoSQLAttack(BaseAttack):
     async def _check_response(self, response, url: str, label: str) -> tuple[list[dict], bool]:
         findings = extract_interesting_data(response.text)
         flag = has_definite_flag(findings)
-        is_bypass = response.status_code == 302 or flag or any(
-            hint in response.text.lower()
-            for hint in ["welcome", "dashboard", "logout", "profile", "admin"]
-        )
+        # Only flag on actual redirect (302 = login success) or confirmed flag.
+        # Text hints like "logout"/"admin" fire on every authenticated page → false positives.
+        is_bypass = response.status_code == 302 or flag
         if is_bypass:
             console.print(f"  [bold red][NoSQL][/bold red] {label}")
             findings.append({
@@ -57,6 +61,12 @@ class NoSQLAttack(BaseAttack):
         param = attack_point.get("param", "")
         method = attack_point.get("method", "GET")
         raw_post_data = attack_point.get("post_data")
+
+        # Skip GET params that don't look like NoSQL-relevant fields
+        if method.upper() == "GET" and param and not any(
+            hint in param.lower() for hint in NOSQL_PARAM_HINTS
+        ):
+            return []
 
         console.print(f"  [cyan][NoSQL][/cyan] {method} {url}")
         all_findings = []
@@ -141,11 +151,10 @@ class NoSQLAttack(BaseAttack):
                 if response.status_code == 200 and len(response.text) > 10:
                     findings = extract_interesting_data(response.text)
                     flag = has_definite_flag(findings)
-                    if flag or findings:
+                    if flag:
                         console.print(f"  [yellow][NoSQL][/yellow] Param injection: {suffix}")
                         all_findings.extend(findings)
-                        if flag:
-                            self.stop_event.set()
-                            return all_findings
+                        self.stop_event.set()
+                        return all_findings
 
         return all_findings

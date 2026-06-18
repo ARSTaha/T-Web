@@ -74,21 +74,22 @@ class IDORAttack(BaseAttack):
                     findings = extract_interesting_data(response.text)
                     flag = has_definite_flag(findings)
 
-                    if flag or findings:
-                        console.print(
-                            f"  [yellow][IDOR][/yellow] Different response for ID={test_id}: "
-                            f"{len(response.text)} chars"
-                        )
-                        findings.append({
-                            "type": "idor_different_response",
-                            "value": f"IDOR @ {url} ID={test_id}: {response.text[:200]}",
-                            "confidence": 0.7,
-                        })
-                        all_findings.extend(findings)
+                    console.print(
+                        f"  [yellow][IDOR][/yellow] Different response for ID={test_id}: "
+                        f"{len(response.text)} chars"
+                    )
+                    findings.append({
+                        "type": "idor_different_response",
+                        "value": f"IDOR @ {url} ID={test_id}: {response.text[:200]}",
+                        "confidence": 0.7,
+                    })
+                    all_findings.extend(findings)
 
-                        if flag:
-                            console.print(f"  [bold green][IDOR][/bold green] FLAG: {flag}")
-                            self.stop_event.set()
-                            return all_findings
+                    if flag:
+                        console.print(f"  [bold green][IDOR][/bold green] FLAG: {flag}")
+                        self.stop_event.set()
+                        return all_findings
+
+                    break  # First different response per endpoint is enough
 
         return all_findings
