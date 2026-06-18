@@ -49,13 +49,7 @@ class XSSAttack(BaseAttack):
         if response is None:
             return []
 
-        marker_found = marker.lower() in response.text.lower()
-        console.print(
-            f"  [dim][XSS probe] url={response.url} status={response.status_code} "
-            f"marker_found={marker_found}[/dim]"
-        )
-
-        if not marker_found:
+        if marker.lower() not in response.text.lower():
             return []
 
         console.print(f"  [yellow][XSS][/yellow] Reflection confirmed at {url} ?{param}")
@@ -71,23 +65,19 @@ class XSSAttack(BaseAttack):
             if response is None:
                 continue
 
-            payload_escaped = payload.replace("<", "").replace(">", "").replace('"', "").replace("'", "")
-            if payload_escaped.lower() in response.text.lower() or payload.lower() in response.text.lower():
-                unencoded = payload in response.text
-                if unencoded:
-                    console.print(f"  [bold red][XSS][/bold red] Unencoded reflection! Payload: {payload!r}")
-                    findings.append({
-                        "type": "xss_reflected",
-                        "value": f"Reflected XSS @ {url} param={param} payload={payload!r}",
-                        "confidence": 0.9,
-                    })
-
-            if findings:
-                all_findings.extend(findings)
+            if payload in response.text:
+                console.print(f"  [bold red][XSS][/bold red] Unencoded reflection! Payload: {payload!r}")
+                all_findings.append({
+                    "type": "xss_reflected",
+                    "value": f"Reflected XSS @ {url} param={param} payload={payload!r}",
+                    "confidence": 0.9,
+                })
                 flag = has_definite_flag(findings)
                 if flag:
                     console.print(f"  [bold green][XSS][/bold green] FLAG: {flag}")
+                    all_findings.extend([f for f in findings if f.get("confidence", 0) >= 1.0])
                     self.stop_event.set()
                     return all_findings
+                break  # İlk başarılı reflection yeterli
 
         return all_findings

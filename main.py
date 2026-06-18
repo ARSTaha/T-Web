@@ -275,9 +275,6 @@ async def main_async(
         except Exception as e:
             console.print(f"  [yellow]Auth failed: {e}[/yellow]")
 
-    console.print(
-        f"  [dim]Session cookie names: {[c['name'] for c in session_data['cookies']]}[/dim]"
-    )
     http_client = build_httpx_session(
         session_data,
         proxy=proxy,
