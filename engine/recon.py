@@ -186,7 +186,13 @@ async def _crawl_page(page: Page, url: str) -> dict:
     }
 
 
-async def run_recon(start_url: str, max_pages: int = 50) -> dict:
+async def run_recon(
+    start_url: str,
+    max_pages: int = 50,
+    login_url: str | None = None,
+    username: str | None = None,
+    password: str | None = None,
+) -> dict:
     console.print(f"  [cyan]Hedef:[/cyan] {start_url}")
     target_netloc = _get_target_netloc(start_url)
 
@@ -206,6 +212,44 @@ async def run_recon(start_url: str, max_pages: int = 50) -> dict:
         page_count = 0
         context = await _setup_context(browser)
         _saved_local_storage: dict = {}
+
+        # Playwright ile login — kimlik bilgileri varsa crawl öncesi oturum aç
+        if login_url and username and password:
+            try:
+                login_page = await context.new_page()
+                await _block_static(login_page)
+                await login_page.goto(login_url, wait_until="domcontentloaded", timeout=15000)
+                await asyncio.sleep(1.0)
+
+                # Kullanıcı adı alanını doldur
+                for sel in ["[name=username]", "[name=email]", "[name=user]", "[name=login]", "[type=text]"]:
+                    try:
+                        await login_page.fill(sel, username, timeout=2000)
+                        break
+                    except Exception:
+                        continue
+
+                # Şifre alanını doldur
+                for sel in ["[name=password]", "[name=pass]", "[name=passwd]", "[type=password]"]:
+                    try:
+                        await login_page.fill(sel, password, timeout=2000)
+                        break
+                    except Exception:
+                        continue
+
+                # Formu gönder
+                for sel in ["[type=submit]", "[name=Login]", "[name=submit]", "button[type=submit]", "button"]:
+                    try:
+                        await login_page.click(sel, timeout=2000)
+                        break
+                    except Exception:
+                        continue
+
+                await asyncio.sleep(2.0)
+                console.print(f"  [green]Playwright login tamamlandı[/green]")
+                await login_page.close()
+            except Exception as e:
+                console.print(f"  [yellow]Playwright login başarısız: {e}[/yellow]")
 
         while to_visit and page_count < max_pages:
             batch_urls = []
@@ -247,6 +291,19 @@ async def run_recon(start_url: str, max_pages: int = 50) -> dict:
 
                 all_pages_data.append(data)
                 page_count += 1
+
+                # Crawlanan URL'nin kendi query parametrelerini attack point olarak ekle
+                current_parsed = urlparse(url)
+                if current_parsed.query:
+                    for param_kv in current_parsed.query.split("&"):
+                        key = param_kv.split("=")[0]
+                        if key:
+                            all_attack_points.append({
+                                "type": "url_param",
+                                "url": url,
+                                "method": "GET",
+                                "param": key,
+                            })
 
                 tech = _detect_tech(data.get("response_headers", {}), data.get("body_snippet", ""))
                 for t in tech:

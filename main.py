@@ -75,6 +75,18 @@ DEFAULT_CREDS = [
 
 
 async def run_passive_recon(base_url: str, client: RateLimitedClient) -> list[dict]:
+    # Soft 404 tespiti: var olmayan bir path'e istek at, imzasını al
+    soft_404_sig = ""
+    try:
+        baseline = await client.get(
+            f"{base_url.rstrip('/')}/zzz_tweb_baseline_xyz123456",
+            timeout=5.0,
+        )
+        if baseline.status_code == 200:
+            soft_404_sig = baseline.text[:400]
+    except Exception:
+        pass
+
     async def probe(path: str):
         try:
             resp = await client.get(
@@ -82,6 +94,8 @@ async def run_passive_recon(base_url: str, client: RateLimitedClient) -> list[di
                 timeout=5.0,
             )
             if resp.status_code in (200, 301, 302, 403):
+                if soft_404_sig and resp.text[:400] == soft_404_sig:
+                    return None  # Soft 404 — login redirect veya custom error page
                 return {"path": path, "status": resp.status_code, "preview": resp.text[:200]}
         except Exception:
             pass
@@ -175,7 +189,14 @@ async def main_async(
 
     # Phase 1: Active Recon
     print_phase(1, "Aktif Recon (Playwright Crawler)")
-    recon_data = await run_recon(url, max_pages=max_pages)
+    recon_login_url = f"{url.rstrip('/')}{login_path}" if login_path else None
+    recon_data = await run_recon(
+        url,
+        max_pages=max_pages,
+        login_url=recon_login_url,
+        username=username,
+        password=password,
+    )
 
     console.print(
         f"  Tech stack: {', '.join(recon_data['tech_stack']) or 'Bilinmiyor'}\n"
