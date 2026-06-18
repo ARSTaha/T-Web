@@ -46,6 +46,7 @@ class NoSQLAttack(BaseAttack):
         flag = has_definite_flag(findings)
         # Only flag on actual redirect (302 = login success) or confirmed flag.
         # Text hints like "logout"/"admin" fire on every authenticated page → false positives.
+        # Return [] when not bypass so ip_address/html_comment don't leak into Phase 3.
         is_bypass = response.status_code == 302 or flag
         if is_bypass:
             console.print(f"  [bold red][NoSQL][/bold red] {label}")
@@ -54,7 +55,8 @@ class NoSQLAttack(BaseAttack):
                 "value": f"NoSQL @ {url}: {response.text[:300]}",
                 "confidence": 0.9,
             })
-        return findings, bool(flag)
+            return findings, bool(flag)
+        return [], bool(flag)
 
     async def run(self, attack_point: dict, payloads: list[str]) -> list[dict]:
         url = attack_point["url"]
