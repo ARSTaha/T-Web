@@ -49,7 +49,14 @@ class XSSAttack(BaseAttack):
         if response is None:
             return []
 
-        if marker.lower() not in response.text.lower():
+        marker_found = marker.lower() in response.text.lower()
+        console.print(
+            f"  [dim][XSS probe] status={response.status_code} "
+            f"marker_found={marker_found} "
+            f"snippet={response.text[:120]!r}[/dim]"
+        )
+
+        if not marker_found:
             return []
 
         console.print(f"  [yellow][XSS][/yellow] Reflection confirmed at {url} ?{param}")
