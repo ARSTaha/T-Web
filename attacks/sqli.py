@@ -63,6 +63,7 @@ class SQLiAttack(BaseAttack):
         extra = [p for p in ERROR_PAYLOADS if p not in seen]
         combined_payloads = list(payloads or []) + extra
 
+        error_confirmed = False
         for payload in combined_payloads:
             if self._should_stop():
                 break
@@ -74,39 +75,45 @@ class SQLiAttack(BaseAttack):
             body_lower = response.text.lower()
             is_error_based = any(sig in body_lower for sig in ERROR_SIGNATURES)
 
-            if is_error_based:
+            if is_error_based and not error_confirmed:
+                error_confirmed = True
                 console.print(f"  [bold red][SQLi][/bold red] Error-based hit! Payload: {payload!r}")
-                findings.append({
+                all_findings.append({
                     "type": "sqli_error",
                     "value": f"Error-based SQLi @ {url} param={param} payload={payload!r}",
                     "confidence": 0.9,
                 })
 
-            if findings:
-                all_findings.extend(findings)
-                flag = has_definite_flag(findings)
+            flag_findings = [f for f in findings if f.get("confidence", 0) >= 1.0]
+            if flag_findings:
+                all_findings.extend(flag_findings)
+                flag = has_definite_flag(flag_findings)
                 if flag:
                     console.print(f"  [bold green][SQLi][/bold green] FLAG: {flag}")
                     self.stop_event.set()
                     return all_findings
 
-        for time_payload in TIME_PAYLOADS:
-            if self._should_stop():
+            if error_confirmed:
                 break
-            t0 = time.monotonic()
-            response, findings = await self._try_payload(method, url, param, time_payload)
-            elapsed = time.monotonic() - t0
 
-            if elapsed >= 2.8:
-                console.print(
-                    f"  [bold red][SQLi][/bold red] Time-based hit! "
-                    f"({elapsed:.1f}s) Payload: {time_payload!r}"
-                )
-                findings.append({
-                    "type": "sqli_time_based",
-                    "value": f"Time-based SQLi ({elapsed:.1f}s) @ {url} param={param}",
-                    "confidence": 0.85,
-                })
-                all_findings.extend(findings)
+        if not error_confirmed:
+            for time_payload in TIME_PAYLOADS:
+                if self._should_stop():
+                    break
+                t0 = time.monotonic()
+                response, findings = await self._try_payload(method, url, param, time_payload)
+                elapsed = time.monotonic() - t0
+
+                if elapsed >= 2.8:
+                    console.print(
+                        f"  [bold red][SQLi][/bold red] Time-based hit! "
+                        f"({elapsed:.1f}s) Payload: {time_payload!r}"
+                    )
+                    all_findings.append({
+                        "type": "sqli_time_based",
+                        "value": f"Time-based SQLi ({elapsed:.1f}s) @ {url} param={param}",
+                        "confidence": 0.85,
+                    })
+                    break
 
         return all_findings
