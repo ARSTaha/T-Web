@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, urlencode, parse_qs, urlunparse
 
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from rich.console import Console
@@ -152,7 +152,7 @@ async def _crawl_page(page: Page, url: str) -> dict:
                 method: f.method || 'GET',
                 inputs: Array.from(f.elements)
                     .filter(e => e.name)
-                    .map(e => ({name: e.name, type: e.type}))
+                    .map(e => ({name: e.name, type: e.type, value: e.value || e.defaultValue || ''}))
             }))
         """)
     except Exception:
@@ -312,28 +312,44 @@ async def run_recon(
 
                 for form in data.get("forms", []):
                     action = form.get("action") or url
-                    for inp in form.get("inputs", []):
+                    method = form.get("method", "GET").upper()
+                    inputs = form.get("inputs", [])
+                    form_defaults = {
+                        inp["name"]: inp.get("value", "")
+                        for inp in inputs if inp.get("name")
+                    }
+                    attack_action = action
+                    if method == "GET" and form_defaults:
+                        _pa = urlparse(action)
+                        _existing = {k: v[0] for k, v in parse_qs(_pa.query).items()}
+                        _merged = {**form_defaults, **_existing}
+                        attack_action = urlunparse(_pa._replace(query=urlencode(_merged)))
+                    for inp in inputs:
+                        name = inp.get("name")
+                        if not name or inp.get("type") in ("submit", "button", "image", "reset"):
+                            continue
                         all_attack_points.append({
                             "type": "form_input",
-                            "url": action,
-                            "method": form.get("method", "GET").upper(),
-                            "param": inp.get("name"),
+                            "url": attack_action,
+                            "method": method,
+                            "param": name,
                             "input_type": inp.get("type", "text"),
                         })
 
                 for link in data.get("links", []):
                     abs_link = urljoin(url, link)
-                    parsed = urlparse(abs_link)
-                    if parsed.query:
-                        for param in parsed.query.split("&"):
-                            key = param.split("=")[0]
-                            if key:
-                                all_attack_points.append({
-                                    "type": "url_param",
-                                    "url": abs_link,
-                                    "method": "GET",
-                                    "param": key,
-                                })
+                    if _is_in_scope(abs_link, target_netloc):
+                        parsed = urlparse(abs_link)
+                        if parsed.query:
+                            for param in parsed.query.split("&"):
+                                key = param.split("=")[0]
+                                if key:
+                                    all_attack_points.append({
+                                        "type": "url_param",
+                                        "url": abs_link,
+                                        "method": "GET",
+                                        "param": key,
+                                    })
                     if abs_link not in visited:
                         to_visit.append(abs_link)
 

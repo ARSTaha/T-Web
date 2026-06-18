@@ -97,7 +97,7 @@ def extract_interesting_data(response_text: str) -> list[dict]:
                         })
                         break
                 else:
-                    printable_ratio = sum(c.isprintable() for c in decoded) / max(len(decoded), 1)
+                    printable_ratio = sum(ord(c) < 128 and c.isprintable() for c in decoded) / max(len(decoded), 1)
                     if printable_ratio > 0.9 and 8 < len(decoded) < 200:
                         findings.append({
                             "type": "high_entropy_b64",
