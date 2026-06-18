@@ -75,27 +75,43 @@ DEFAULT_CREDS = [
 
 
 async def run_passive_recon(base_url: str, client: RateLimitedClient) -> list[dict]:
-    # Soft 404 tespiti: var olmayan bir path'e istek at, imzasını al
-    soft_404_sig = ""
+    from urllib.parse import urlparse as _urlparse
+    # Pasif recon her zaman origin'e (scheme+host+port) probe yapar
+    _p = _urlparse(base_url)
+    origin = f"{_p.scheme}://{_p.netloc}"
+
+    # Soft 404 baseline: var olmayan bir path'in final URL'si ve body uzunluğu
+    soft_404_final_url = ""
+    soft_404_len = -1
     try:
         baseline = await client.get(
-            f"{base_url.rstrip('/')}/zzz_tweb_baseline_xyz123456",
+            f"{origin}/zzz_tweb_baseline_xyz123456",
             timeout=5.0,
         )
         if baseline.status_code == 200:
-            soft_404_sig = baseline.text[:400]
+            soft_404_final_url = str(baseline.url)
+            soft_404_len = len(baseline.text)
     except Exception:
         pass
 
+    def _is_soft_404(resp) -> bool:
+        if soft_404_len < 0:
+            return False
+        # Redirect sonrası aynı URL'ye düştüyse (örn. her şey /login.php'ye gidiyorsa)
+        if soft_404_final_url and str(resp.url) == soft_404_final_url:
+            return True
+        # Body uzunluğu baseline ile ±2% veya ±200 karakter içindeyse
+        diff = abs(len(resp.text) - soft_404_len)
+        if diff < max(200, int(soft_404_len * 0.02)):
+            return True
+        return False
+
     async def probe(path: str):
         try:
-            resp = await client.get(
-                f"{base_url.rstrip('/')}/{path}",
-                timeout=5.0,
-            )
+            resp = await client.get(f"{origin}/{path}", timeout=5.0)
             if resp.status_code in (200, 301, 302, 403):
-                if soft_404_sig and resp.text[:400] == soft_404_sig:
-                    return None  # Soft 404 — login redirect veya custom error page
+                if _is_soft_404(resp):
+                    return None
                 return {"path": path, "status": resp.status_code, "preview": resp.text[:200]}
         except Exception:
             pass
