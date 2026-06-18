@@ -243,19 +243,33 @@ async def main_async(
     if login_path and username and password:
         console.print(f"  [dim]Auth: {login_path} → {username}[/dim]")
         try:
-            await base_client.post(
-                f"{_origin}{login_path}",
-                data={"username": username, "password": password},
-            )
-            # httpx accumulates cookies from redirect chain in _client.cookies;
-            # login_resp.cookies only has final-response cookies (usually empty after 302→200)
-            login_cookie_names = {c["name"] for c in session_data["cookies"]}
-            for name, value in base_client._client.cookies.items():
-                if name not in login_cookie_names:
-                    session_data["cookies"].append({"name": name, "value": value})
+            import re as _re
+            # GET the login page first to pick up CSRF tokens + submit button names
+            _login_get = await base_client.get(f"{_origin}{login_path}")
+            _extra_fields: dict = {}
+            for _m in _re.finditer(
+                r'<input\s[^>]*\btype=["\']?\s*(hidden|submit)\s*["\']?[^>]*/?>',
+                _login_get.text, _re.IGNORECASE,
+            ):
+                _tag = _m.group(0)
+                _nm = _re.search(r'\bname=["\']([^"\']+)["\']', _tag)
+                _vm = _re.search(r'\bvalue=["\']([^"\']*)["\']', _tag)
+                if _nm:
+                    _extra_fields[_nm.group(1)] = _vm.group(1) if _vm else ""
+
+            _login_data = {"username": username, "password": password, **_extra_fields}
+            await base_client.post(f"{_origin}{login_path}", data=_login_data)
+
+            # Merge into session_data without overwriting Playwright's valid PHPSESSID
+            # unless the httpx session is explicitly newer (contains new names not in Playwright)
+            _pw_names = {c["name"] for c in session_data["cookies"]}
+            for _cname, _cvalue in base_client._client.cookies.items():
+                if _cname not in _pw_names:
+                    session_data["cookies"].append({"name": _cname, "value": _cvalue})
                 else:
+                    # Update the value in case DVWA regenerated the session on login
                     session_data["cookies"] = [
-                        c if c["name"] != name else {"name": name, "value": value}
+                        c if c["name"] != _cname else {"name": _cname, "value": _cvalue}
                         for c in session_data["cookies"]
                     ]
         except Exception as e:
