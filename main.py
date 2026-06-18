@@ -243,17 +243,19 @@ async def main_async(
     if login_path and username and password:
         console.print(f"  [dim]Auth: {login_path} → {username}[/dim]")
         try:
-            login_resp = await base_client.post(
+            await base_client.post(
                 f"{_origin}{login_path}",
                 data={"username": username, "password": password},
             )
+            # httpx accumulates cookies from redirect chain in _client.cookies;
+            # login_resp.cookies only has final-response cookies (usually empty after 302→200)
             login_cookie_names = {c["name"] for c in session_data["cookies"]}
-            for cookie in login_resp.cookies.jar:
-                if cookie.name not in login_cookie_names:
-                    session_data["cookies"].append({"name": cookie.name, "value": cookie.value})
+            for name, value in base_client._client.cookies.items():
+                if name not in login_cookie_names:
+                    session_data["cookies"].append({"name": name, "value": value})
                 else:
                     session_data["cookies"] = [
-                        c if c["name"] != cookie.name else {"name": cookie.name, "value": cookie.value}
+                        c if c["name"] != name else {"name": name, "value": value}
                         for c in session_data["cookies"]
                     ]
         except Exception as e:
