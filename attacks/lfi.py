@@ -78,16 +78,18 @@ class LFIAttack(BaseAttack):
                     f"Payload: {payload!r}\n"
                     f"  Preview: {response.text[:200]!r}"
                 )
-                findings.append({
+                all_findings.append({
                     "type": "lfi_file_read",
-                    "value": f"LFI @ {url} param={param} payload={payload!r}: {response.text[:300]}",
+                    "value": f"LFI @ {url} param={param} payload={payload!r}",
                     "confidence": 0.95,
                 })
-                all_findings.extend(findings)
 
                 if flag:
                     console.print(f"  [bold green][LFI][/bold green] FLAG: {flag}")
+                    all_findings.extend([f for f in findings if f.get("confidence", 0) >= 1.0])
                     self.stop_event.set()
                     return all_findings
+
+                break  # İlk başarılı okuma yeterli, devam etme
 
         return all_findings

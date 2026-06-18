@@ -11,6 +11,7 @@ from pathlib import Path
 
 import click
 from rich.console import Console
+from urllib.parse import urlparse as _urlparse
 
 _env_file = Path(__file__).parent / ".env"
 if _env_file.exists():
@@ -198,14 +199,16 @@ async def main_async(
                 await oob.stop()
                 return
 
-    login_url = f"{url.rstrip('/')}{login_path}" if login_path else None
+    _parsed_url = _urlparse(url)
+    _origin = f"{_parsed_url.scheme}://{_parsed_url.netloc}"
+    login_url = f"{_origin}{login_path}" if login_path else None
     if login_url and not username:
         console.print(f"  [dim]Default credentials deneniyor: {login_url}[/dim]")
         await try_default_creds(login_url, base_client)
 
     # Phase 1: Active Recon
     print_phase(1, "Aktif Recon (Playwright Crawler)")
-    recon_login_url = f"{url.rstrip('/')}{login_path}" if login_path else None
+    recon_login_url = f"{_origin}{login_path}" if login_path else None
     recon_data = await run_recon(
         url,
         max_pages=max_pages,
@@ -241,7 +244,7 @@ async def main_async(
         console.print(f"  [dim]Auth: {login_path} → {username}[/dim]")
         try:
             login_resp = await base_client.post(
-                f"{url.rstrip('/')}{login_path}",
+                f"{_origin}{login_path}",
                 data={"username": username, "password": password},
             )
             login_cookie_names = {c["name"] for c in session_data["cookies"]}
@@ -315,7 +318,7 @@ async def main_async(
     for vector, points in grouped.items():
         if stop_event.is_set():
             break
-        tasks = [run_attack_on_point(p) for p in points[:10]]
+        tasks = [run_attack_on_point(p) for p in points[:30]]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for result in results:
