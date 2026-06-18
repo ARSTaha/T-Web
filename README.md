@@ -1,11 +1,10 @@
 # T-Web
 
-CTF web challenge automation tool. Crawls targets with a real browser, maps attack surfaces, triages vectors with AI, and runs parallel attacks.
+CTF web challenge automation tool. Crawls targets with a real browser, maps attack surfaces, and runs parallel attacks.
 
 ## Features
 
 - **Playwright crawler** — handles React/Vue/Next.js, captures ghost APIs (XHR/fetch)
-- **AI triage** — Claude analyzes recon output and ranks attack vectors with custom payloads
 - **7 attack modules** — SQLi, XSS, SSRF, LFI, SSTI, IDOR, NoSQL injection
 - **Session persistence** — cookies, JWT, CSRF tokens carried from browser to HTTP client
 - **WAF detection + bypass** — 5 tamper techniques applied automatically
@@ -17,18 +16,13 @@ CTF web challenge automation tool. Crawls targets with a real browser, maps atta
 
 ```bash
 git clone https://github.com/ARSTaha/T-Web.git
-cd t-web
+cd T-Web
 
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
 pip install -r requirements.txt
 playwright install --with-deps chromium
-```
-
-Optional — AI triage (Claude API):
-```bash
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 ```
 
 ## Usage
@@ -39,9 +33,6 @@ python main.py -u https://target.ctf/
 
 # With Burp proxy
 python main.py -u https://target.ctf/ --proxy http://127.0.0.1:8080 --no-verify
-
-# Fast mode (no AI triage)
-python main.py -u https://target.ctf/ --fast
 
 # Specific vectors only
 python main.py -u https://target.ctf/ --attacks sqli,xss,lfi
@@ -60,9 +51,7 @@ python main.py -u https://target.ctf/ --rate-limit 3 --delay 0.5 --concurrency 3
 | `-u` | required | Target URL |
 | `--proxy` | — | HTTP proxy (e.g. Burp: `http://127.0.0.1:8080`) |
 | `--no-verify` | false | Disable SSL verification |
-| `--api-key` | `.env` | Anthropic API key for AI triage |
 | `--attacks` | all | Comma-separated vector list: `sqli,xss,ssrf,lfi,ssti,idor,nosql` |
-| `--fast` | false | Skip AI triage |
 | `--login` | — | Login endpoint path (e.g. `/login`) |
 | `--user` | — | Username for login |
 | `--pass` | — | Password for login |
@@ -76,9 +65,8 @@ python main.py -u https://target.ctf/ --rate-limit 3 --delay 0.5 --concurrency 3
 ```
 Phase 0 — Passive recon    (robots.txt, .git, .env, backup files...)
 Phase 1 — Active crawl     (Playwright, ghost API capture, form mapping)
-Phase 2 — AI triage        (Claude ranks vectors, generates site-specific payloads)
-Phase 3 — Parallel attack  (7 modules run concurrently, WAF bypass if needed)
-Phase 4 — Results          (findings ranked by confidence)
+Phase 2 — Parallel attack  (7 modules run concurrently, WAF bypass if needed)
+Phase 3 — Results          (findings ranked by confidence)
 ```
 
 ## Author

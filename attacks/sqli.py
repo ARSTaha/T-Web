@@ -3,7 +3,6 @@ SQL Injection attack module.
 Covers: error-based, boolean-based blind, time-based blind, union-based.
 """
 from __future__ import annotations
-import asyncio
 import time
 
 from attacks.base import BaseAttack
@@ -60,7 +59,9 @@ class SQLiAttack(BaseAttack):
         console.print(f"  [cyan][SQLi][/cyan] {method} {url} ?{param}")
 
         all_findings = []
-        combined_payloads = (payloads or []) + ERROR_PAYLOADS
+        seen = set(payloads or [])
+        extra = [p for p in ERROR_PAYLOADS if p not in seen]
+        combined_payloads = list(payloads or []) + extra
 
         for payload in combined_payloads:
             if self._should_stop():

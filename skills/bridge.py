@@ -1,8 +1,7 @@
 """
 Skills library bridge.
-Reads SKILL.md files from Anthropic-Cybersecurity-Skills and extracts:
-1. Short summaries for Claude context (~150 tokens each)
-2. Payload examples from workflow sections
+Reads SKILL.md files from Anthropic-Cybersecurity-Skills and extracts
+payload examples from workflow sections for use as attack payloads.
 """
 from __future__ import annotations
 import re
@@ -28,43 +27,6 @@ PAYLOAD_PATTERN = re.compile(
     r"```(?:bash|python|http|sql|javascript)?\s*(.*?)```",
     re.DOTALL,
 )
-
-
-def get_skill_summary(vector: str) -> str:
-    if not SKILLS_BASE.exists():
-        return ""
-
-    keywords = VECTOR_KEYWORDS.get(vector, [vector])
-    summaries = []
-
-    for skill_dir in sorted(SKILLS_BASE.iterdir()):
-        if not skill_dir.is_dir():
-            continue
-        dir_lower = skill_dir.name.lower()
-        if not any(kw in dir_lower for kw in keywords):
-            continue
-
-        skill_file = skill_dir / "SKILL.md"
-        if not skill_file.exists():
-            continue
-
-        content = skill_file.read_text(encoding="utf-8", errors="ignore")
-
-        desc_match = re.search(r"description:\s*(.+)", content)
-        when_match = re.search(r"## When to Use\n((?:- .+\n?){1,4})", content)
-
-        desc = desc_match.group(1).strip() if desc_match else ""
-        when_lines = when_match.group(1).strip() if when_match else ""
-
-        summary = f"**{skill_dir.name}**: {desc}"
-        if when_lines:
-            summary += f"\n{when_lines}"
-
-        summaries.append(summary)
-        if len(summaries) >= 2:
-            break
-
-    return "\n\n".join(summaries)
 
 
 def extract_payloads_from_skill(vector: str, limit: int = 20) -> list[str]:

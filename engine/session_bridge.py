@@ -12,13 +12,6 @@ from playwright.async_api import Page
 
 JWT_REGEX = r"ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
 
-DANGEROUS_PATH_PATTERNS = [
-    "/logout", "/signout", "/sign-out", "/log-out",
-    "/delete", "/remove", "/destroy",
-    "/reset", "/clear", "/flush",
-    "/api/user/delete", "/api/session/destroy",
-]
-
 
 async def extract_session(page: Page, response_headers: dict | None = None) -> dict:
     cookies = await page.context.cookies()

@@ -15,7 +15,7 @@ from urllib.parse import urlparse, urljoin
 
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from rich.console import Console
-from engine.session_bridge import extract_session
+from engine.session_bridge import extract_session, get_init_script
 
 console = Console()
 
@@ -231,15 +231,7 @@ async def run_recon(start_url: str, max_pages: int = 50) -> dict:
                 await context.close()
                 context = await _setup_context(browser)
                 if _saved_local_storage:
-                    ls_json = json.dumps(_saved_local_storage)
-                    await context.add_init_script(f"""
-                        (function(){{
-                            const d={ls_json};
-                            for(const [k,v] of Object.entries(d)){{
-                                try{{localStorage.setItem(k,v);}}catch(e){{}}
-                            }}
-                        }})();
-                    """)
+                    await context.add_init_script(get_init_script(_saved_local_storage))
                 console.print(f"  [dim]Context yenilendi (RAM temizlendi)[/dim]")
 
             for url in batch_urls:

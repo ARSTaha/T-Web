@@ -18,13 +18,13 @@ console = Console()
 def print_banner():
     console.print(Panel.fit(
         "[bold red]T-Web[/bold red] [dim]CTF Web Attack Tool[/dim]\n"
-        "[dim]by Tajaa | Mode: Smart Hybrid[/dim]",
+        "[dim]by Tajaa[/dim]",
         border_style="red",
     ))
 
 
 def print_phase(phase: int, name: str):
-    icons = {0: "🔍", 1: "🕷", 2: "🧠", 3: "⚔", 4: "🚩"}
+    icons = {0: "🔍", 1: "🕷", 2: "⚔", 3: "🚩"}
     icon = icons.get(phase, "▶")
     console.print(f"\n[bold cyan]{icon}  Phase {phase}: {name}[/bold cyan]")
 
@@ -99,23 +99,3 @@ def export_finding(
     Path(filename).write_text(json.dumps(report, indent=2, ensure_ascii=False))
     console.print(f"[dim]  Write-up kaydedildi: {filename}[/dim]")
     return filename
-
-
-def print_attack_plan(attack_plan: list[dict]):
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold yellow")
-    table.add_column("#", style="dim", width=3)
-    table.add_column("Vektör", style="cyan")
-    table.add_column("Hedef", style="white")
-    table.add_column("Güven", style="green")
-    table.add_column("Gerekçe", style="dim")
-
-    for i, item in enumerate(attack_plan, 1):
-        conf = item.get("confidence", 0)
-        table.add_row(
-            str(i),
-            item.get("vector", "?").upper(),
-            item.get("target", "?")[:40],
-            f"{int(conf * 100)}%",
-            item.get("reasoning", "")[:50],
-        )
-    console.print(table)

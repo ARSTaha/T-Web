@@ -11,7 +11,6 @@ from pathlib import Path
 
 import click
 from rich.console import Console
-from rich.prompt import Confirm
 
 _env_file = Path(__file__).parent / ".env"
 if _env_file.exists():
@@ -23,7 +22,6 @@ if _env_file.exists():
 sys.path.insert(0, str(Path(__file__).parent))
 
 from engine.recon import run_recon
-from engine.analyzer import run_triage
 from engine.flag_hunter import extract_interesting_data, has_definite_flag
 from engine.session_bridge import build_httpx_session
 from attacks.base import SessionManager, SessionExpiredError
@@ -39,7 +37,7 @@ from utils.http_client import build_client, RateLimitedClient
 from utils.oob_server import OOBServer
 from utils.reporter import (
     print_banner, print_phase, print_findings,
-    print_flag_found, export_finding, print_attack_plan,
+    print_flag_found, export_finding,
 )
 from utils.waf_detect import detect_waf, get_bypass_payloads
 
@@ -116,9 +114,7 @@ async def main_async(
     url: str,
     proxy: str | None,
     no_verify: bool,
-    api_key: str | None,
     attacks_filter: list[str],
-    fast: bool,
     login_path: str | None,
     username: str | None,
     password: str | None,
@@ -155,7 +151,7 @@ async def main_async(
                 f"{hit['path']}: {hit['preview'][:80]}"
             )
             if flag_in_passive:
-                console.print(f"\n  [bold green]🚩 FLAG PASSIVE RECON'DA BULUNDU![/bold green]")
+                console.print(f"\n  [bold green]FLAG PASSIVE RECON'DA BULUNDU![/bold green]")
                 print_flag_found(flag_in_passive, "passive_recon", f"{url}/{hit['path']}")
                 export_finding(
                     flag=flag_in_passive,
@@ -196,41 +192,9 @@ async def main_async(
     if waf:
         console.print(f"  [yellow]⚠ WAF tespit edildi: {waf}[/yellow]")
 
-    # Phase 2: AI Triage
-    attack_plan = []
-    quick_wins = []
-    flag_philosophy = ""
+    # Phase 2: Attack
+    print_phase(2, "Paralel Saldırı")
 
-    if not fast:
-        print_phase(2, "AI Triage (Claude)")
-        triage_result = await run_triage(
-            recon=recon_data,
-            passive_hits=passive_hits,
-            api_key=api_key,
-        )
-        attack_plan = triage_result.get("attack_plan", [])
-        quick_wins = triage_result.get("quick_wins", [])
-        flag_philosophy = triage_result.get("flag_philosophy", "")
-
-        if attack_plan:
-            print_attack_plan(attack_plan)
-        if flag_philosophy:
-            console.print(f"\n  [bold yellow]Flag Hipotezi:[/bold yellow] {flag_philosophy}")
-        if quick_wins:
-            console.print("\n  [bold yellow]Quick Wins:[/bold yellow]")
-            for qw in quick_wins:
-                console.print(f"  • {qw}")
-
-        if not Confirm.ask("\n[bold]Saldırıyı başlat?[/bold]", default=True):
-            console.print("[dim]İptal edildi.[/dim]")
-            await base_client.aclose()
-            await oob.stop()
-            return
-
-    # Phase 3: Attack
-    print_phase(3, "Paralel Saldırı")
-
-    # Seed session from Playwright recon (captures cookies/JWT accumulated during crawl)
     session_data = recon_data.get("session_data", {
         "cookies": [], "jwt": None, "csrf": None,
         "local_storage": {}, "session_storage": {},
@@ -243,7 +207,6 @@ async def main_async(
                 f"{url.rstrip('/')}{login_path}",
                 data={"username": username, "password": password},
             )
-            # Merge login cookies on top of Playwright session (login takes priority)
             login_cookie_names = {c["name"] for c in session_data["cookies"]}
             for cookie in login_resp.cookies.jar:
                 if cookie.name not in login_cookie_names:
@@ -262,47 +225,16 @@ async def main_async(
         no_verify=no_verify,
     )
     session_mgr = SessionManager(http_client)
-
     stop_event = asyncio.Event()
-
     enabled_vectors = set(attacks_filter) if attacks_filter else set(ATTACK_MODULES.keys())
 
-    # Build attack point list — AI-ordered first, then recon points expanded across all vectors
-    if attack_plan:
-        ordered_attack_points = []
-        for plan_item in sorted(attack_plan, key=lambda x: x.get("confidence", 0), reverse=True):
-            vector = plan_item.get("vector", "")
-            if vector not in enabled_vectors:
-                continue
-            target_url = plan_item.get("target", "")
-            if not target_url:
-                continue
-            if not target_url.startswith("http"):
-                target_url = url.rstrip("/") + "/" + target_url.lstrip("/")
-            ordered_attack_points.append({
-                "type": "api_endpoint",
-                "url": target_url,
-                "method": "GET",
-                "param": None,
-                "vector": vector,
-                "ai_payloads": plan_item.get("payloads", []),
-            })
-        # Recon points have no vector yet — cross-product them so they are not silently dropped
-        recon_expanded = []
-        for ap in recon_data.get("attack_points", []):
-            for v in enabled_vectors:
-                ap_copy = dict(ap)
-                ap_copy["vector"] = v
-                recon_expanded.append(ap_copy)
-        attack_points = ordered_attack_points + recon_expanded
-    else:
-        expanded = []
-        for ap in recon_data.get("attack_points", []):
-            for v in enabled_vectors:
-                ap_copy = dict(ap)
-                ap_copy["vector"] = v
-                expanded.append(ap_copy)
-        attack_points = expanded
+    expanded = []
+    for ap in recon_data.get("attack_points", []):
+        for v in enabled_vectors:
+            ap_copy = dict(ap)
+            ap_copy["vector"] = v
+            expanded.append(ap_copy)
+    attack_points = expanded
 
     async def run_attack_on_point(ap: dict):
         if stop_event.is_set():
@@ -316,16 +248,13 @@ async def main_async(
         if not attack_cls:
             return []
 
-        ai_payloads = ap.get("ai_payloads", [])
         skill_payloads = get_payloads(vector)
-        base_payloads = ai_payloads + skill_payloads
 
-        # If WAF detected, expand payloads with bypass-tampered variants for injection vectors
         if waf and vector in ("sqli", "xss", "lfi", "ssti"):
-            tampered = [tp for p in base_payloads for tp in get_bypass_payloads(p)]
-            all_payloads = base_payloads + tampered
+            tampered = [tp for p in skill_payloads for tp in get_bypass_payloads(p)]
+            all_payloads = skill_payloads + tampered
         else:
-            all_payloads = base_payloads
+            all_payloads = skill_payloads
 
         attacker = attack_cls(session=session_mgr, oob_server=oob, stop_event=stop_event)
         try:
@@ -377,10 +306,9 @@ async def main_async(
                         )
                         stop_event.set()
 
-    # Phase 4: Aggregated Results
-    print_phase(4, "Sonuçlar")
+    # Phase 3: Results
+    print_phase(3, "Sonuçlar")
     if all_findings_acc:
-        # Sort by confidence descending and deduplicate by value
         seen_values: set[str] = set()
         deduped_findings = []
         for f in sorted(all_findings_acc, key=lambda x: x.get("confidence", 0), reverse=True):
@@ -400,9 +328,7 @@ async def main_async(
 @click.option("-u", "--url", required=True, help="Hedef URL (örn: https://target.ctf/)")
 @click.option("--proxy", default=None, help="Burp proxy (örn: http://127.0.0.1:8080)")
 @click.option("--no-verify", is_flag=True, default=False, help="SSL cert doğrulamasını kapat")
-@click.option("--api-key", default=None, help="Anthropic API key (.env'den de alınır)")
 @click.option("--attacks", default=None, help="Virgülle ayrılmış vektörler: sqli,xss,lfi")
-@click.option("--fast", is_flag=True, default=False, help="AI triage olmadan hızlı mod")
 @click.option("--login", default=None, help="Login path (örn: /login)")
 @click.option("--user", default=None, help="Login kullanıcı adı")
 @click.option("--pass", "password", default=None, help="Login şifre")
@@ -411,7 +337,7 @@ async def main_async(
 @click.option("--concurrency", default=5, type=int, help="Eş zamanlı bağlantı (default: 5)")
 @click.option("--max-pages", default=50, type=int, help="Max crawl sayfa (default: 50)")
 def cli(
-    url, proxy, no_verify, api_key, attacks, fast,
+    url, proxy, no_verify, attacks,
     login, user, password, rate_limit, delay, concurrency, max_pages,
 ):
     """T-Web — CTF Web Attack Automation Tool by Tajaa"""
@@ -419,15 +345,12 @@ def cli(
         url = "http://" + url
 
     attacks_filter = [a.strip() for a in attacks.split(",")] if attacks else []
-    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
 
     asyncio.run(main_async(
         url=url,
         proxy=proxy,
         no_verify=no_verify,
-        api_key=key,
         attacks_filter=attacks_filter,
-        fast=fast,
         login_path=login,
         username=user,
         password=password,
