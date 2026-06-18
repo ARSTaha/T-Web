@@ -13,8 +13,7 @@ LFI_PARAM_HINTS = ["file", "path", "page", "template", "include", "src", "load",
 
 FILE_SUCCESS_SIGNATURES = [
     "root:x:", "root:0:0", "/bin/bash", "[boot loader]",
-    "for 16-bit app support", "WINDOWS", "win.ini",
-    "[extensions]", "MSDOS.SYS",
+    "for 16-bit app support", "[extensions]", "MSDOS.SYS",
 ]
 
 TARGET_FILES = {

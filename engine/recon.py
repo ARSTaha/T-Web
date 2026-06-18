@@ -396,7 +396,10 @@ async def run_recon(
     deduped_points = []
     seen_points = set()
     for ap in all_attack_points:
-        key = (ap["url"], ap.get("param"), ap["method"])
+        # Dedup by path (not full URL) + param + method so fi/?page=file1.php and
+        # fi/?page=file2.php don't produce separate attack points for the same param
+        _ap_path = urlparse(ap["url"]).path
+        key = (_ap_path, ap.get("param"), ap["method"])
         if key not in seen_points:
             seen_points.add(key)
             deduped_points.append(ap)
