@@ -338,6 +338,12 @@ async def run_recon(
 
                 for form in data.get("forms", []):
                     action = form.get("action") or url
+                    # Playwright sometimes serializes DOM node refs as "ref: <Node>" when
+                    # a form's action property returns a non-string (e.g. named input shadows it).
+                    # Fall back to the current page URL for any non-HTTP action.
+                    _action_scheme = urlparse(action).scheme
+                    if _action_scheme not in ("http", "https", ""):
+                        action = url
                     method = form.get("method", "GET").upper()
                     inputs = form.get("inputs", [])
                     form_defaults = {
