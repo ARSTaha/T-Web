@@ -97,6 +97,15 @@ class SQLiAttack(BaseAttack):
                 break
 
         if not error_confirmed:
+            # Baseline: measure natural response time so slow pages don't false-positive
+            baseline_time = 0.0
+            try:
+                t_b = time.monotonic()
+                await self._try_payload(method, url, param, "tweb_timebased_baseline_noop")
+                baseline_time = time.monotonic() - t_b
+            except Exception:
+                pass
+
             for time_payload in TIME_PAYLOADS:
                 if self._should_stop():
                     break
@@ -104,10 +113,11 @@ class SQLiAttack(BaseAttack):
                 response, findings = await self._try_payload(method, url, param, time_payload)
                 elapsed = time.monotonic() - t0
 
-                if elapsed >= 2.8:
+                # Only flag if the SLEEP delay is clearly on top of the baseline latency
+                if elapsed >= 2.8 and (elapsed - baseline_time) >= 2.5:
                     console.print(
                         f"  [bold red][SQLi][/bold red] Time-based hit! "
-                        f"({elapsed:.1f}s) Payload: {time_payload!r}"
+                        f"({elapsed:.1f}s, baseline {baseline_time:.1f}s) Payload: {time_payload!r}"
                     )
                     all_findings.append({
                         "type": "sqli_time_based",
