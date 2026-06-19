@@ -3,6 +3,7 @@ SQL Injection attack module.
 Covers: error-based, boolean-based blind, time-based blind, union-based.
 """
 from __future__ import annotations
+import asyncio
 import time
 
 from attacks.base import BaseAttack
@@ -57,6 +58,19 @@ ERROR_PAYLOADS = [
     "' UNION SELECT null,null--",
     "' UNION SELECT null,null,null--",
 ]
+
+
+# Global: only 1 SQLi time-based test runs at a time across all concurrent attack tasks.
+# Prevents parallel SLEEP(n) queries from overloading the DB, which would make every
+# unrelated page respond slowly and cross the elapsed threshold (false positives).
+_TIME_SEM: asyncio.Semaphore | None = None
+
+
+def _get_time_sem() -> asyncio.Semaphore:
+    global _TIME_SEM
+    if _TIME_SEM is None:
+        _TIME_SEM = asyncio.Semaphore(1)
+    return _TIME_SEM
 
 
 class SQLiAttack(BaseAttack):
@@ -167,41 +181,46 @@ class SQLiAttack(BaseAttack):
 
         # Phase 3: Time-based (only if no error or boolean found — slow, 3s/payload)
         if not error_confirmed and not boolean_confirmed:
-            baseline_time = 0.0
-            try:
-                t_b = time.monotonic()
-                await self._try_payload(
-                    method, url, param, "tweb_timebased_baseline_noop", as_header=is_header
-                )
-                baseline_time = time.monotonic() - t_b
-            except Exception:
-                pass
-
-            for time_payload in TIME_PAYLOADS:
-                if self._should_stop():
-                    break
-                t0 = time.monotonic()
-                response, findings = await self._try_payload(
-                    method, url, param, time_payload, as_header=is_header
-                )
-                elapsed = time.monotonic() - t0
-
-                # Skip timeouts (response=None, elapsed≈10s): a timeout is DB overload or
-                # a network error — not a confirmed SLEEP.  Real SLEEP(3) returns a response
-                # in ~3-5s; only that qualifies as time-based detection.
-                if response is None:
-                    continue
-
-                if elapsed >= 2.8 and (elapsed - baseline_time) >= 2.5:
-                    console.print(
-                        f"  [bold red][SQLi][/bold red] Time-based hit! "
-                        f"({elapsed:.1f}s, baseline {baseline_time:.1f}s) Payload: {time_payload!r}"
+            # Serialise time-based tests globally.  When all 32 attack-point tasks run
+            # concurrently they each queue SLEEP(3) payloads simultaneously, overloading
+            # MySQL and making every page — even non-SQLi ones — respond in ≥3 s.
+            # Holding this semaphore ensures only one SLEEP is in-flight at a time, so
+            # the baseline and the payload are both measured on a quiescent database.
+            async with _get_time_sem():
+                baseline_time = 0.0
+                try:
+                    t_b = time.monotonic()
+                    await self._try_payload(
+                        method, url, param, "tweb_timebased_baseline_noop", as_header=is_header
                     )
-                    all_findings.append({
-                        "type": "sqli_time_based",
-                        "value": f"Time-based SQLi ({elapsed:.1f}s) @ {url} {location}",
-                        "confidence": 0.85,
-                    })
-                    break
+                    baseline_time = time.monotonic() - t_b
+                except Exception:
+                    pass
+
+                for time_payload in TIME_PAYLOADS:
+                    if self._should_stop():
+                        break
+                    t0 = time.monotonic()
+                    response, findings = await self._try_payload(
+                        method, url, param, time_payload, as_header=is_header
+                    )
+                    elapsed = time.monotonic() - t0
+
+                    # Skip timeouts (response=None, elapsed≈10s): a real SLEEP(3)
+                    # returns a response in ~3 s; a None means network/DB error.
+                    if response is None:
+                        continue
+
+                    if elapsed >= 2.8 and (elapsed - baseline_time) >= 2.5:
+                        console.print(
+                            f"  [bold red][SQLi][/bold red] Time-based hit! "
+                            f"({elapsed:.1f}s, baseline {baseline_time:.1f}s) Payload: {time_payload!r}"
+                        )
+                        all_findings.append({
+                            "type": "sqli_time_based",
+                            "value": f"Time-based SQLi ({elapsed:.1f}s) @ {url} {location}",
+                            "confidence": 0.85,
+                        })
+                        break
 
         return all_findings
