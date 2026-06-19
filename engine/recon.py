@@ -46,6 +46,22 @@ DANGEROUS_PATH_PATTERNS = [
     "/account/delete", "/profile/delete",
 ]
 
+# Ghost API URLs that are transport/infrastructure — not web app endpoints
+SKIP_API_URL_PATTERNS = [
+    "/socket.io/",
+    "/sockjs/",
+    "/__webpack",
+    "/hot-update",
+    "/livereload",
+    "/_next/webpack-hmr",
+]
+
+# Query param names that are protocol/infrastructure — never injection targets
+SKIP_PARAM_NAMES = {
+    "EIO", "transport", "sid", "t", "v", "_",
+    "cb", "callback", "nocache", "jsonp", "nonce",
+}
+
 TECH_FINGERPRINTS = {
     "Next.js": ["_next/", "__NEXT_DATA__", "next.js"],
     "React": ["react.development.js", "react.production.min.js", "__reactFiber"],
@@ -367,14 +383,17 @@ async def run_recon(
                     api_url = api.get("url", "")
                     if not _is_in_scope(api_url, target_netloc):
                         continue
+                    # Skip WebSocket/HMR transport endpoints — not injection targets
+                    if any(pat in api_url for pat in SKIP_API_URL_PATTERNS):
+                        continue
                     all_ghost_apis.append(api)
                     api_method = api.get("method", "GET").upper()
                     api_parsed = urlparse(api_url)
                     if api_parsed.query:
-                        # Extract each query param so attack modules can inject into them
+                        # Extract each query param, skipping infrastructure param names
                         for param_kv in api_parsed.query.split("&"):
                             key_part = param_kv.split("=")[0]
-                            if key_part:
+                            if key_part and key_part not in SKIP_PARAM_NAMES:
                                 all_attack_points.append({
                                     "type": "api_param",
                                     "url": api_url,
