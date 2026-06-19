@@ -294,10 +294,9 @@ async def run_recon(
                 await login_page.close()
 
                 # Post-login: some apps (e.g. DVWA) default to the highest security
-                # level after a session reset.  Use DOM select + JS click so the real
-                # browser submits the form with valid CSRF token — no manual token
-                # extraction needed.  Verify the result by reading the select value
-                # after navigation rather than trusting that the submit succeeded.
+                # level after a session reset.  Use DOM select + page.click() inside
+                # expect_navigation so Playwright waits for the form submission to
+                # complete before we verify.  Log any error so silent failures are visible.
                 _parsed_login = urlparse(login_url)
                 _origin = f"{_parsed_login.scheme}://{_parsed_login.netloc}"
                 for _sec_path in ["/security.php", "/security", "/admin/security"]:
@@ -316,20 +315,17 @@ async def run_recon(
                             _sec_page = None
                             continue
 
-                        # Select "low" via Playwright API (handles option visibility)
+                        # Select "low" option
                         await _sec_page.select_option(
                             'select[name="security"]', value="low", timeout=2000
                         )
-                        # Submit via JS — works in headless without visibility constraints
-                        await _sec_page.evaluate(
-                            "() => { const b = document.querySelector('[name=\"seclev_submit\"]'); if (b) b.click(); }"
-                        )
-                        try:
-                            await _sec_page.wait_for_load_state("domcontentloaded", timeout=4000)
-                        except Exception:
-                            await asyncio.sleep(1.5)
+                        # Click submit and wait for the resulting navigation to settle
+                        async with _sec_page.expect_navigation(
+                            wait_until="domcontentloaded", timeout=5000
+                        ):
+                            await _sec_page.click('[name="seclev_submit"]', timeout=3000)
 
-                        # Verify: read the current select value from the reloaded page
+                        # Verify: read the select value from the reloaded page
                         _cur_sec = await _sec_page.evaluate(
                             """() => {
                                 const s = document.querySelector('select[name="security"]');
@@ -349,12 +345,15 @@ async def run_recon(
                                 f"(şu an: {_cur_sec!r}, {_sec_path})[/yellow]"
                             )
                         break
-                    except Exception:
+                    except Exception as _sec_err:
                         try:
                             if _sec_page:
                                 await _sec_page.close()
                         except Exception:
                             pass
+                        console.print(
+                            f"  [dim][!] Security reset ({_sec_path}): {_sec_err}[/dim]"
+                        )
             except Exception as e:
                 console.print(f"  [yellow]Playwright login başarısız: {e}[/yellow]")
 
