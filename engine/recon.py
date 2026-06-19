@@ -293,9 +293,11 @@ async def run_recon(
                 console.print(f"  [green]Playwright login tamamlandı[/green]")
                 await login_page.close()
 
-                # Post-login: some apps (e.g. DVWA) default to the highest security level
-                # after a session reset.  Try common security-settings pages and set the
-                # level to its lowest option so that vulnerability pages remain testable.
+                # Post-login: some apps (e.g. DVWA) default to the highest security
+                # level after a session reset.  Try common security-settings pages and
+                # POST the level to its lowest value using context.request so that the
+                # browser's session cookie is sent automatically (no DOM interaction
+                # needed — avoids headless click-visibility issues).
                 _parsed_login = urlparse(login_url)
                 _origin = f"{_parsed_login.scheme}://{_parsed_login.netloc}"
                 for _sec_path in ["/security.php", "/security", "/admin/security"]:
@@ -303,17 +305,24 @@ async def run_recon(
                         _sec_page = await context.new_page()
                         await _block_static(_sec_page)
                         await _sec_page.goto(_origin + _sec_path, wait_until="domcontentloaded", timeout=5000)
-                        # Look for a security-level select (DVWA: name=security)
-                        await _sec_page.select_option("select[name=security]", "low", timeout=1500)
-                        # Submit — DVWA uses name=seclev_submit; fall back to any submit
-                        for _btn in ["[name=seclev_submit]", "[type=submit]", "button"]:
-                            try:
-                                await _sec_page.click(_btn, timeout=1500)
-                                break
-                            except Exception:
-                                continue
-                        await asyncio.sleep(0.5)
+                        # Check that a security-level select exists on this page
+                        _has_select = await _sec_page.evaluate(
+                            "() => !!document.querySelector('select[name=\"security\"]')"
+                        )
+                        if not _has_select:
+                            await _sec_page.close()
+                            continue
+                        # Extract CSRF token if the form requires one
+                        _csrf_token = await _sec_page.evaluate(
+                            "() => (document.querySelector('[name=\"user_token\"]') || {}).value || ''"
+                        )
                         await _sec_page.close()
+                        # POST directly via context.request — uses the browser session cookie,
+                        # bypasses headless click-visibility issues entirely.
+                        _form: dict = {"security": "low", "seclev_submit": "Submit"}
+                        if _csrf_token:
+                            _form["user_token"] = _csrf_token
+                        await context.request.post(_origin + _sec_path, form=_form)
                         console.print(f"  [green]Güvenlik seviyesi LOW olarak ayarlandı ({_sec_path})[/green]")
                         break
                     except Exception:
