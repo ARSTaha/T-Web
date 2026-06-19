@@ -64,10 +64,11 @@ class NoSQLAttack(BaseAttack):
         method = attack_point.get("method", "GET")
         raw_post_data = attack_point.get("post_data")
 
-        # Skip GET params that don't look like NoSQL-relevant fields
-        if method.upper() == "GET" and param and not any(
+        # Skip GET params that don't look like NoSQL-relevant fields.
+        # Also skip GET with no param — nothing to inject into the URL.
+        if method.upper() == "GET" and (not param or not any(
             hint in param.lower() for hint in NOSQL_PARAM_HINTS
-        ):
+        )):
             return []
 
         console.print(f"  [cyan][NoSQL][/cyan] {method} {url}")

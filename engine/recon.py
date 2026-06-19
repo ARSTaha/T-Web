@@ -118,7 +118,7 @@ async def _block_static(page: Page):
         await page.route(pattern, lambda r: r.abort())
 
 
-async def _crawl_page(page: Page, url: str) -> dict:
+async def _crawl_page(page: Page, url: str, target_netloc: str = "") -> dict:
     captured_requests = []
     response_headers = {}
 
@@ -143,6 +143,12 @@ async def _crawl_page(page: Page, url: str) -> dict:
         await asyncio.sleep(2.0)
     except Exception as e:
         console.print(f"[dim]  [!] {url} yüklenemedi: {e}[/dim]")
+        return {}
+
+    # If a redirect sent us to an external domain, don't extract any data from it.
+    # This prevents forms/links from github.com (or other redirect targets) leaking
+    # into attack_points as if they were in-scope endpoints.
+    if target_netloc and not _is_in_scope(page.url, target_netloc):
         return {}
 
     try:
@@ -287,7 +293,7 @@ async def run_recon(
                 await _block_static(page)
                 console.print(f"  [dim]→ {url}[/dim]")
 
-                data = await _crawl_page(page, url)
+                data = await _crawl_page(page, url, target_netloc)
                 await page.close()
 
                 if not data:

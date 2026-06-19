@@ -50,7 +50,7 @@ class LFIAttack(BaseAttack):
         param = attack_point.get("param", "")
         method = attack_point.get("method", "GET")
 
-        if param and not any(hint in param.lower() for hint in LFI_PARAM_HINTS):
+        if not param or not any(hint in param.lower() for hint in LFI_PARAM_HINTS):
             return []
 
         console.print(f"  [cyan][LFI][/cyan] {method} {url} ?{param}")
