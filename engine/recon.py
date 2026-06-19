@@ -60,7 +60,13 @@ SKIP_API_URL_PATTERNS = [
 SKIP_PARAM_NAMES = {
     "EIO", "transport", "sid", "t", "v", "_",
     "cb", "callback", "nocache", "jsonp", "nonce",
+    # App-config params: attacking these can corrupt server session state
+    "phpids", "security", "user_token",
 }
+
+# Query param keys whose presence in a URL indicates a state-changing action.
+# The crawler skips these URLs to avoid accidentally toggling server settings.
+_DANGEROUS_QUERY_KEYS = {"phpids"}
 
 TECH_FINGERPRINTS = {
     "Next.js": ["_next/", "__NEXT_DATA__", "next.js"],
@@ -98,8 +104,15 @@ def _is_in_scope(url: str, target_netloc: str) -> bool:
 
 
 def _is_safe_url(url: str) -> bool:
-    path = urlparse(url).path.lower()
-    return not any(pattern in path for pattern in DANGEROUS_PATH_PATTERNS)
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    if any(pattern in path for pattern in DANGEROUS_PATH_PATTERNS):
+        return False
+    # Skip URLs whose query string contains state-changing params (e.g. phpids=on).
+    query_keys = set(parse_qs(parsed.query).keys())
+    if query_keys & _DANGEROUS_QUERY_KEYS:
+        return False
+    return True
 
 
 def _detect_tech(headers: dict, body: str) -> list[str]:
@@ -332,7 +345,7 @@ async def run_recon(
                 if current_parsed.query:
                     for param_kv in current_parsed.query.split("&"):
                         key = param_kv.split("=")[0]
-                        if key:
+                        if key and key not in SKIP_PARAM_NAMES:
                             all_attack_points.append({
                                 "type": "url_param",
                                 "url": url,
@@ -369,6 +382,8 @@ async def run_recon(
                         name = inp.get("name")
                         if not name or inp.get("type") in ("submit", "button", "image", "reset"):
                             continue
+                        if name in SKIP_PARAM_NAMES:
+                            continue
                         all_attack_points.append({
                             "type": "form_input",
                             "url": attack_action,
@@ -384,7 +399,7 @@ async def run_recon(
                         if parsed.query:
                             for param in parsed.query.split("&"):
                                 key = param.split("=")[0]
-                                if key:
+                                if key and key not in SKIP_PARAM_NAMES:
                                     all_attack_points.append({
                                         "type": "url_param",
                                         "url": abs_link,
