@@ -279,21 +279,16 @@ async def main_async(
 
             await base_client.post(f"{_origin}{login_path}", data=_login_data)
 
-            # Only merge non-session cookies from httpx into Playwright's session.
-            # Playwright ran the real login (with security_level=0 select); its session
-            # ID is correct. Never let httpx's session cookie overwrite it.
+            # Playwright's session is authoritative — it ran the real browser login
+            # (including security_level=0 select). httpx login may only ADD cookies
+            # that Playwright doesn't already have. Never overwrite Playwright's values.
             _session_cookie_names = {"phpsessid", "session", "sid", "jsessionid", "connect.sid"}
             _pw_names = {c["name"] for c in session_data["cookies"]}
             for _cname, _cvalue in base_client._client.cookies.items():
                 if _cname.lower() in _session_cookie_names:
-                    continue  # Playwright's session wins
+                    continue  # Never overwrite Playwright's session ID
                 if _cname not in _pw_names:
                     session_data["cookies"].append({"name": _cname, "value": _cvalue})
-                else:
-                    session_data["cookies"] = [
-                        c if c["name"] != _cname else {"name": _cname, "value": _cvalue}
-                        for c in session_data["cookies"]
-                    ]
         except Exception as e:
             console.print(f"  [yellow]Auth failed: {e}[/yellow]")
 
