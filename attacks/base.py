@@ -83,9 +83,17 @@ class BaseAttack:
             return None, []
         try:
             if as_header and param:
-                response = await self.session.request(
-                    method, url, headers={param: payload}, timeout=10.0
-                )
+                # httpx rejects header values with trailing whitespace (e.g. "-- ").
+                # Strip it — MySQL recognizes "--" at end-of-query without trailing space.
+                header_payload = payload.rstrip()
+                if not header_payload:
+                    return None, []
+                try:
+                    response = await self.session.request(
+                        method, url, headers={param: header_payload}, timeout=10.0
+                    )
+                except ValueError:
+                    return None, []  # silently skip — other chars httpx rejects
             elif method.upper() == "GET" and param:
                 from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
                 parsed = urlparse(url)
