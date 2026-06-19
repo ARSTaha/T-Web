@@ -1,13 +1,13 @@
 """
 Skills library bridge.
-Reads SKILL.md files from Anthropic-Cybersecurity-Skills and extracts
+Reads SKILL.md files from an optional local skills directory and extracts
 payload examples from workflow sections for use as attack payloads.
 """
 from __future__ import annotations
 import re
 from pathlib import Path
 
-SKILLS_BASE = Path(__file__).parent.parent.parent / "Anthropic-Cybersecurity-Skills" / "skills"
+SKILLS_BASE = Path(__file__).parent.parent.parent / "security-skills" / "skills"
 
 VECTOR_KEYWORDS = {
     "sqli": ["sql-injection", "sqlmap", "sql_injection", "second-order-sql"],
