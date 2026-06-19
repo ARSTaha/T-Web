@@ -244,30 +244,52 @@ async def main_async(
         console.print(f"  [dim]Auth: {login_path} → {username}[/dim]")
         try:
             import re as _re
-            # GET the login page first to pick up CSRF tokens + submit button names
             _login_get = await base_client.get(f"{_origin}{login_path}")
-            _extra_fields: dict = {}
-            for _m in _re.finditer(
-                r'<input\s[^>]*\btype=["\']?\s*(hidden|submit)\s*["\']?[^>]*/?>',
-                _login_get.text, _re.IGNORECASE,
-            ):
+            _login_data: dict = {}
+
+            # Parse all <input> elements and fill by type
+            for _m in _re.finditer(r'<input\s[^>]+?/?>', _login_get.text, _re.IGNORECASE):
                 _tag = _m.group(0)
+                _t_m = _re.search(r'\btype=["\']?(\w+)', _tag, _re.IGNORECASE)
+                _t = _t_m.group(1).lower() if _t_m else "text"
                 _nm = _re.search(r'\bname=["\']([^"\']+)["\']', _tag)
                 _vm = _re.search(r'\bvalue=["\']([^"\']*)["\']', _tag)
-                if _nm:
-                    _extra_fields[_nm.group(1)] = _vm.group(1) if _vm else ""
+                if not _nm:
+                    continue
+                _name = _nm.group(1)
+                _val = _vm.group(1) if _vm else ""
+                if _t == "hidden":
+                    _login_data[_name] = _val
+                elif _t == "password":
+                    _login_data[_name] = password
+                elif _t == "text":
+                    # Handles 'login', 'user', 'email', 'username', etc.
+                    _login_data[_name] = username
 
-            _login_data = {"username": username, "password": password, **_extra_fields}
+            # Parse <select> elements — pick first option (lowest/safest, e.g. 0=low for bWAPP)
+            for _m in _re.finditer(
+                r'<select[^>]+name=["\']([^"\']+)["\'][^>]*>(.*?)</select>',
+                _login_get.text, _re.IGNORECASE | _re.DOTALL,
+            ):
+                _opts = _re.findall(
+                    r'<option[^>]+value=["\']([^"\']*)["\']', _m.group(2), _re.IGNORECASE
+                )
+                if _opts:
+                    _login_data[_m.group(1)] = _opts[0]
+
             await base_client.post(f"{_origin}{login_path}", data=_login_data)
 
-            # Merge into session_data without overwriting Playwright's valid PHPSESSID
-            # unless the httpx session is explicitly newer (contains new names not in Playwright)
+            # Only merge non-session cookies from httpx into Playwright's session.
+            # Playwright ran the real login (with security_level=0 select); its session
+            # ID is correct. Never let httpx's session cookie overwrite it.
+            _session_cookie_names = {"phpsessid", "session", "sid", "jsessionid", "connect.sid"}
             _pw_names = {c["name"] for c in session_data["cookies"]}
             for _cname, _cvalue in base_client._client.cookies.items():
+                if _cname.lower() in _session_cookie_names:
+                    continue  # Playwright's session wins
                 if _cname not in _pw_names:
                     session_data["cookies"].append({"name": _cname, "value": _cvalue})
                 else:
-                    # Update the value in case DVWA regenerated the session on login
                     session_data["cookies"] = [
                         c if c["name"] != _cname else {"name": _cname, "value": _cvalue}
                         for c in session_data["cookies"]
