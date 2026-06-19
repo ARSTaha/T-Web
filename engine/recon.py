@@ -461,6 +461,24 @@ async def run_recon(
             seen_points.add(key)
             deduped_points.append(ap)
 
+    # Synthetic header injection attack points — test common injectable request headers
+    # (tested once against start_url; backend typically processes them identically per-route)
+    INJECTABLE_HEADERS = [
+        "X-Forwarded-For",
+        "User-Agent",
+        "Referer",
+        "X-Forwarded-Host",
+        "X-Real-IP",
+    ]
+    for _hdr in INJECTABLE_HEADERS:
+        deduped_points.append({
+            "type": "header_inject",
+            "url": start_url,
+            "method": "GET",
+            "param": _hdr,
+            "input_type": "header",
+        })
+
     interesting_headers = {}
     for pd in all_pages_data:
         for k, v in pd.get("response_headers", {}).items():

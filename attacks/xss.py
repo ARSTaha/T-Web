@@ -36,15 +36,17 @@ class XSSAttack(BaseAttack):
         url = attack_point["url"]
         param = attack_point.get("param")
         method = attack_point.get("method", "GET")
+        is_header = attack_point.get("input_type") == "header"
 
         if not param:
             return []
 
-        console.print(f"  [cyan][XSS][/cyan] {method} {url} ?{param}")
+        location = f"header:{param}" if is_header else f"?{param}"
+        console.print(f"  [cyan][XSS][/cyan] {method} {url} {location}")
 
         marker = f"TWEB_{uuid.uuid4().hex[:8]}"
         probe_payload = f"<{marker}>"
-        response, _ = await self._try_payload(method, url, param, probe_payload)
+        response, _ = await self._try_payload(method, url, param, probe_payload, as_header=is_header)
 
         if response is None:
             return []
@@ -52,7 +54,7 @@ class XSSAttack(BaseAttack):
         if marker.lower() not in response.text.lower():
             return []
 
-        console.print(f"  [yellow][XSS][/yellow] Reflection confirmed at {url} ?{param}")
+        console.print(f"  [yellow][XSS][/yellow] Reflection confirmed at {url} {location}")
 
         all_findings = []
         combined_payloads = (payloads or []) + XSS_PAYLOADS
@@ -61,7 +63,9 @@ class XSSAttack(BaseAttack):
             if self._should_stop():
                 break
 
-            response, findings = await self._try_payload(method, url, param, payload)
+            response, findings = await self._try_payload(
+                method, url, param, payload, as_header=is_header
+            )
             if response is None:
                 continue
 
@@ -69,7 +73,7 @@ class XSSAttack(BaseAttack):
                 console.print(f"  [bold red][XSS][/bold red] Unencoded reflection! Payload: {payload!r}")
                 all_findings.append({
                     "type": "xss_reflected",
-                    "value": f"Reflected XSS @ {url} param={param} payload={payload!r}",
+                    "value": f"Reflected XSS @ {url} {location} payload={payload!r}",
                     "confidence": 0.9,
                 })
                 flag = has_definite_flag(findings)

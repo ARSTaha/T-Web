@@ -77,11 +77,16 @@ class BaseAttack:
         payload: str,
         data: dict | None = None,
         json_data: dict | None = None,
+        as_header: bool = False,
     ) -> tuple[httpx.Response | None, list[dict]]:
         if self._should_stop():
             return None, []
         try:
-            if method.upper() == "GET" and param:
+            if as_header and param:
+                response = await self.session.request(
+                    method, url, headers={param: payload}, timeout=10.0
+                )
+            elif method.upper() == "GET" and param:
                 from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
                 parsed = urlparse(url)
                 params = parse_qs(parsed.query, keep_blank_values=True)
