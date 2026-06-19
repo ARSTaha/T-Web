@@ -259,6 +259,15 @@ async def run_recon(
                     except Exception:
                         continue
 
+                # Security level select'i varsa en düşük değere (0/low) ayarla
+                # bWAPP gibi uygulamalar login formunda security_level select içerir
+                for sel in ["[name=security_level]", "select[name=security_level]"]:
+                    try:
+                        await login_page.select_option(sel, "0", timeout=1500)
+                        break
+                    except Exception:
+                        continue
+
                 # Formu gönder
                 for sel in ["[type=submit]", "[name=Login]", "[name=submit]", "button[type=submit]", "button"]:
                     try:
