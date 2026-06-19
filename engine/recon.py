@@ -365,12 +365,29 @@ async def run_recon(
 
                 for api in data.get("ghost_apis", []):
                     api_url = api.get("url", "")
-                    if _is_in_scope(api_url, target_netloc):
-                        all_ghost_apis.append(api)
+                    if not _is_in_scope(api_url, target_netloc):
+                        continue
+                    all_ghost_apis.append(api)
+                    api_method = api.get("method", "GET").upper()
+                    api_parsed = urlparse(api_url)
+                    if api_parsed.query:
+                        # Extract each query param so attack modules can inject into them
+                        for param_kv in api_parsed.query.split("&"):
+                            key_part = param_kv.split("=")[0]
+                            if key_part:
+                                all_attack_points.append({
+                                    "type": "api_param",
+                                    "url": api_url,
+                                    "method": api_method,
+                                    "param": key_part,
+                                    "post_data": api.get("post_data"),
+                                })
+                    else:
+                        # Parameterless endpoint — keep for NoSQL POST body injection
                         all_attack_points.append({
                             "type": "api_endpoint",
                             "url": api_url,
-                            "method": api.get("method", "GET"),
+                            "method": api_method,
                             "param": None,
                             "post_data": api.get("post_data"),
                         })
