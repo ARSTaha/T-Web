@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import httpx
 from rich.console import Console
-from engine.flag_hunter import extract_interesting_data, has_definite_flag
+from engine.flag_hunter import extract_interesting_data
 
 console = Console()
 
@@ -122,7 +122,8 @@ class BaseAttack:
         except SessionExpiredError:
             raise
         except Exception as e:
-            console.print(f"  [dim][!] {self.name}: {url} → {e}[/dim]")
+            if str(e):  # suppress blank messages (e.g. bare asyncio.TimeoutError)
+                console.print(f"  [dim][!] {self.name}: {url} → {e}[/dim]")
             return None, []
 
     async def run(self, attack_point: dict, payloads: list[str]) -> list[dict]:

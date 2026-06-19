@@ -186,6 +186,12 @@ class SQLiAttack(BaseAttack):
                 )
                 elapsed = time.monotonic() - t0
 
+                # Skip timeouts (response=None, elapsed≈10s): a timeout is DB overload or
+                # a network error — not a confirmed SLEEP.  Real SLEEP(3) returns a response
+                # in ~3-5s; only that qualifies as time-based detection.
+                if response is None:
+                    continue
+
                 if elapsed >= 2.8 and (elapsed - baseline_time) >= 2.5:
                     console.print(
                         f"  [bold red][SQLi][/bold red] Time-based hit! "
