@@ -106,6 +106,18 @@ class SQLiAttack(BaseAttack):
         combined_payloads = list(payloads or []) + extra
 
         # Phase 1: Error-based
+        # Diagnostic: one request with a benign value to verify session & security level
+        _diag_resp, _ = await self._try_payload(method, url, param, "tweb_diag_1", as_header=is_header)
+        if _diag_resp is not None:
+            _dr = str(_diag_resp.url)
+            _db = _diag_resp.text.lower()
+            _sess_ok = "login" not in _dr and "username" not in _db[:200]
+            _sec_ok = "impossible" not in _db[:500] and "security=impossible" not in _db
+            console.print(
+                f"  [dim][diag] {url} ?{param}: status={_diag_resp.status_code} "
+                f"final_url={_dr!r} sess={'✓' if _sess_ok else '✗'} sec={'✓' if _sec_ok else '✗'}[/dim]"
+            )
+
         error_confirmed = False
         for payload in combined_payloads:
             if self._should_stop():
