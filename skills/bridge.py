@@ -21,6 +21,8 @@ VECTOR_KEYWORDS = {
     "xxe": ["xxe", "xml-external-entity", "xml-injection"],
     "deserialization": ["insecure-deserialization"],
     "api": ["api-security", "jwt-vulnerabilities", "oauth2"],
+    "cmdi": ["command-injection", "os-command", "rce", "code-execution"],
+    "jwt":  ["jwt-vulnerabilities", "jwt-auth", "token-forgery", "oauth2"],
 }
 
 PAYLOAD_PATTERN = re.compile(

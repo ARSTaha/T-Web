@@ -1,0 +1,2 @@
+# JWT saldırısı için secret listesi attacks/jwt.py içindeki COMMON_SECRETS listesinde.
+# Bu dosya ilerleyen versiyonlar için rezerve edilmiştir.

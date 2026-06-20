@@ -33,6 +33,8 @@ from attacks.lfi import LFIAttack
 from attacks.ssti import SSTIAttack
 from attacks.idor import IDORAttack
 from attacks.nosql import NoSQLAttack
+from attacks.cmdi import CMDiAttack
+from attacks.jwt import JWTAttack
 from skills.bridge import get_payloads
 from utils.http_client import build_client, RateLimitedClient
 from utils.oob_server import OOBServer
@@ -52,6 +54,8 @@ ATTACK_MODULES = {
     "ssti": SSTIAttack,
     "idor": IDORAttack,
     "nosql": NoSQLAttack,
+    "cmdi": CMDiAttack,
+    "jwt": JWTAttack,
 }
 
 PASSIVE_TARGETS = [
@@ -308,6 +312,23 @@ async def main_async(
             ap_copy["vector"] = v
             expanded.append(ap_copy)
     attack_points = expanded
+
+    if "jwt" in enabled_vectors and session_data.get("jwt"):
+        _jwt_test_urls = [url] + [ap["url"] for ap in recon_data["attack_points"][:5]]
+        expanded.append({
+            "type": "jwt_token",
+            "url": url,
+            "method": "GET",
+            "param": None,
+            "jwt_value": session_data["jwt"],
+            "jwt_cookie_name": next(
+                (c["name"] for c in session_data.get("cookies", [])
+                 if c["name"].lower() in ("token", "jwt", "access_token", "id_token")),
+                None,
+            ),
+            "test_urls": list(dict.fromkeys(_jwt_test_urls)),
+            "vector": "jwt",
+        })
 
     async def run_attack_on_point(ap: dict):
         if stop_event.is_set():

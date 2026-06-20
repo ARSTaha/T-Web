@@ -8,8 +8,13 @@ from rich.console import Console
 
 console = Console()
 
-LFI_PARAM_HINTS = ["file", "path", "page", "template", "include", "src", "load",
-                   "view", "doc", "dir", "folder", "content", "lang", "locale"]
+LFI_PARAM_HINTS = [
+    "file", "path", "page", "template", "include", "src", "load",
+    "view", "doc", "dir", "folder", "content", "lang", "locale",
+    "data", "resource", "tpl", "layout", "module", "tmpl",
+    "config", "read", "filename", "cat", "download",
+    "open", "show", "display",
+]
 
 FILE_SUCCESS_SIGNATURES = [
     "root:x:", "root:0:0", "/bin/bash", "[boot loader]",

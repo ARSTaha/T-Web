@@ -9,8 +9,12 @@ from rich.console import Console
 
 console = Console()
 
-SSTI_PARAM_HINTS = ["name", "greeting", "message", "template", "render", "view",
-                    "subject", "body", "content", "title", "query", "search", "q"]
+SSTI_PARAM_HINTS = [
+    "name", "greeting", "message", "template", "render", "view",
+    "subject", "body", "content", "title", "query", "search", "q",
+    "tpl", "tmpl", "expr", "html", "output", "layout",
+    "format", "text", "markup", "snippet", "code",
+]
 
 # Use large multiplication results (99980001) to avoid false positives:
 # small numbers like 49 commonly appear in HTML (CSS values, counts, etc.)
