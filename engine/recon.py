@@ -369,24 +369,32 @@ async def run_recon(
                 break
 
             if page_count > 0 and page_count % PAGES_PER_CONTEXT == 0:
-                # Save cookies + localStorage before closing so session survives renewal
+                # Cookies must be saved BEFORE localStorage — keep them in separate try
+                # blocks so a localStorage failure cannot cause cookie loss.
                 _saved_cookies_ctx: list = []
                 try:
-                    _ls_page = await context.new_page()
-                    _ls_raw = await _ls_page.evaluate("() => JSON.stringify(localStorage)")
-                    if _ls_raw:
-                        _saved_local_storage = json.loads(_ls_raw)
-                    await _ls_page.close()
                     _saved_cookies_ctx = await context.cookies()
                 except Exception:
                     pass
+
+                try:
+                    _ls_page = await context.new_page()
+                    _ls_raw = await _ls_page.evaluate("() => JSON.stringify(localStorage)")
+                    await _ls_page.close()
+                    if _ls_raw and _ls_raw not in ("null", "{}"):
+                        _saved_local_storage = json.loads(_ls_raw)
+                except Exception:
+                    pass
+
                 await context.close()
                 context = await _setup_context(browser)
                 if _saved_cookies_ctx:
                     await context.add_cookies(_saved_cookies_ctx)
                 if _saved_local_storage:
                     await context.add_init_script(get_init_script(_saved_local_storage))
-                console.print(f"  [dim]Context yenilendi (RAM temizlendi)[/dim]")
+                console.print(
+                    f"  [dim]Context yenilendi ({len(_saved_cookies_ctx)} cookie taşındı)[/dim]"
+                )
 
             for url in batch_urls:
                 page = await context.new_page()
