@@ -77,6 +77,8 @@ class CMDiAttack(BaseAttack):
         all_findings = []
 
         extra_data = attack_point.get("extra_data", {})
+        if method.upper() == "POST":
+            console.print(f"  [dim][CMDi] POST form fields: {list(extra_data.keys())}[/dim]")
 
         # Phase 1 — Time-based (most reliable, serialized)
         time_confirmed = False
