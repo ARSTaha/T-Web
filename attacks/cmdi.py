@@ -76,13 +76,15 @@ class CMDiAttack(BaseAttack):
         console.print(f"  [cyan][CMDi][/cyan] {method} {url} ?{param}")
         all_findings = []
 
+        extra_data = attack_point.get("extra_data", {})
+
         # Phase 1 — Time-based (most reliable, serialized)
         time_confirmed = False
         async with _get_cmdi_sem():
             baseline_time = 0.0
             try:
                 t_b = time.monotonic()
-                await self._try_payload(method, url, param, "tweb_cmdi_baseline_noop")
+                await self._try_payload(method, url, param, "tweb_cmdi_baseline_noop", data=extra_data)
                 baseline_time = time.monotonic() - t_b
             except Exception:
                 pass
@@ -91,7 +93,7 @@ class CMDiAttack(BaseAttack):
                 if self._should_stop():
                     break
                 t0 = time.monotonic()
-                response, findings = await self._try_payload(method, url, param, payload)
+                response, findings = await self._try_payload(method, url, param, payload, data=extra_data)
                 elapsed = time.monotonic() - t0
 
                 if response is None:
@@ -125,7 +127,7 @@ class CMDiAttack(BaseAttack):
                 if self._should_stop():
                     break
                 oob_payload = tpl.format(url=oob_url)
-                await self._try_payload(method, url, param, oob_payload)
+                await self._try_payload(method, url, param, oob_payload, data=extra_data)
                 await asyncio.sleep(1.5)
                 if self.oob.was_triggered(token):
                     info = self.oob.get_hit_info(token)
@@ -148,7 +150,7 @@ class CMDiAttack(BaseAttack):
             for payload in ERROR_PAYLOADS:
                 if self._should_stop():
                     break
-                response, findings = await self._try_payload(method, url, param, payload)
+                response, findings = await self._try_payload(method, url, param, payload, data=extra_data)
                 if response is None:
                     continue
 
@@ -174,7 +176,7 @@ class CMDiAttack(BaseAttack):
             for payload in payloads:
                 if self._should_stop():
                     break
-                response, findings = await self._try_payload(method, url, param, payload)
+                response, findings = await self._try_payload(method, url, param, payload, data=extra_data)
                 if response is None:
                     continue
                 flag = has_definite_flag(findings)

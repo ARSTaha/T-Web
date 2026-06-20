@@ -460,6 +460,7 @@ async def run_recon(
                             "method": method,
                             "param": name,
                             "input_type": inp.get("type", "text"),
+                            "extra_data": form_defaults,
                         })
 
                 for link in data.get("links", []):
