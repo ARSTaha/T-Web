@@ -6,7 +6,7 @@ Detection: file read signatures in response body only (no OOB).
 from __future__ import annotations
 from pathlib import Path
 
-from attacks.base import BaseAttack
+from attacks.base import BaseAttack, SessionExpiredError
 from engine.flag_hunter import extract_interesting_data, has_definite_flag
 from rich.console import Console
 
@@ -65,7 +65,7 @@ class XXEAttack(BaseAttack):
                 return sig
         return None
 
-    async def run(self, attack_point: dict, payloads: list[str]) -> list[dict]:
+    async def run(self, attack_point: dict, _payloads: list[str]) -> list[dict]:
         if not self._is_relevant(attack_point):
             return []
 
@@ -94,6 +94,8 @@ class XXEAttack(BaseAttack):
                         headers={"Content-Type": ct},
                         timeout=10.0,
                     )
+                except SessionExpiredError:
+                    raise
                 except Exception:
                     continue
 

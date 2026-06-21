@@ -227,10 +227,9 @@ async def _mine_js_endpoints(
     target_netloc: str,
 ) -> list[dict]:
     """Download in-scope .js files and extract validated API endpoint paths."""
-    import re as _re
     import httpx as _httpx
 
-    PATH_RE = _re.compile(
+    PATH_RE = re.compile(
         r'''["'`](/(?:api|rest|graphql|v\d+)/[a-zA-Z0-9_\-/]{3,40})["'`]'''
     )
     found: list[dict] = []
