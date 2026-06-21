@@ -44,6 +44,7 @@ from attacks.nosql import NoSQLAttack
 from attacks.cmdi import CMDiAttack
 from attacks.jwt import JWTAttack
 from attacks.xxe import XXEAttack
+from attacks.upload import UploadAttack
 from skills.bridge import get_payloads
 from utils.http_client import build_client, RateLimitedClient
 from utils.oob_server import OOBServer
@@ -66,6 +67,7 @@ ATTACK_MODULES = {
     "cmdi": CMDiAttack,
     "jwt": JWTAttack,
     "xxe": XXEAttack,
+    "upload": UploadAttack,
 }
 
 PASSIVE_TARGETS = [
@@ -504,7 +506,7 @@ async def main_async(
 @click.option("-u", "--url", required=True, help="Hedef URL (örn: https://target.ctf/)")
 @click.option("--proxy", default=None, help="Burp proxy (örn: http://127.0.0.1:8080)")
 @click.option("--no-verify", is_flag=True, default=False, help="SSL cert doğrulamasını kapat")
-@click.option("--attacks", default=None, help="Virgülle ayrılmış vektörler: sqli,xss,ssrf,lfi,ssti,idor,nosql,cmdi,jwt,xxe")
+@click.option("--attacks", default=None, help="Virgülle ayrılmış vektörler: sqli,xss,ssrf,lfi,ssti,idor,nosql,cmdi,jwt,xxe,upload")
 @click.option("--login", default=None, help="Login path (örn: /login)")
 @click.option("--user", default=None, help="Login kullanıcı adı")
 @click.option("--pass", "password", default=None, help="Login şifre")

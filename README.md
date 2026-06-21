@@ -1,6 +1,6 @@
 # T-Web
 
-CTF web challenge automation tool. Crawls targets with a real browser, maps the full attack surface, and runs 10 parallel attack modules.
+CTF web challenge automation tool. Crawls targets with a real browser, maps the full attack surface, and runs 11 parallel attack modules.
 
 Built for web-category CTF challenges where manual testing is too slow and generic scanners miss JS-heavy apps, SPA logins, and blind injection points.
 
@@ -9,7 +9,7 @@ Built for web-category CTF challenges where manual testing is too slow and gener
 ## Features
 
 - **Real browser crawler** — Playwright (Chromium) handles React/Vue/Next.js, executes JavaScript, captures XHR/fetch ghost APIs that static crawlers miss
-- **10 attack modules** — SQLi, XSS, LFI, SSTI, SSRF, IDOR, NoSQL, Command Injection, JWT, XXE
+- **11 attack modules** — SQLi, XSS, LFI, SSTI, SSRF, IDOR, NoSQL, Command Injection, JWT, XXE, File Upload
 - **Path brute-force** — 151 CTF-focused paths probed in Phase 0 (flag targets, admin panels, backup files, debug endpoints, framework-specific paths); soft-404 filtered
 - **JS endpoint mining** — fetches in-scope `.js` bundles and extracts `/api/`, `/rest/`, `/graphql/` paths; HEAD-validates and adds to attack surface
 - **CORS misconfiguration detection** — passive check with a spoofed origin; reports wildcard + credentials and reflected-origin patterns
@@ -47,7 +47,7 @@ playwright install --with-deps chromium
 ## Usage
 
 ```bash
-# Full scan — all 10 modules
+# Full scan — all 11 modules
 python main.py -u https://target.ctf/
 
 # Target specific vectors
@@ -117,6 +117,7 @@ python main.py -u https://target.ctf/ --rate-limit 3 --delay 0.5 --concurrency 3
 | `cmdi` | Time-based (sleep/timeout), OOB (curl/wget callback), error signature detection |
 | `jwt` | Algorithm confusion (alg:none × 3 case variants), HS256 weak secret brute-force (30 common secrets), claim-based privilege escalation |
 | `xxe` | XML External Entity file read via raw POST body (`application/xml`, `text/xml`); detects `/etc/passwd`, flag files, `/proc/self/environ` in response |
+| `upload` | File upload bypass: extension variants (`.php5`, `.phtml`, `.phar`), MIME-type spoof, magic byte prepend, double extension; RCE confirmed via unique marker before reporting |
 
 ---
 
@@ -125,7 +126,7 @@ python main.py -u https://target.ctf/ --rate-limit 3 --delay 0.5 --concurrency 3
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-u` | required | Target URL |
-| `--attacks` | all | Modules: `sqli,xss,ssrf,lfi,ssti,idor,nosql,cmdi,jwt,xxe` |
+| `--attacks` | all | Modules: `sqli,xss,ssrf,lfi,ssti,idor,nosql,cmdi,jwt,xxe,upload` |
 | `--login` | — | Login path (e.g. `/login`) |
 | `--user` | — | Username |
 | `--pass` | — | Password |
