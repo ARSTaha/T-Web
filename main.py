@@ -281,7 +281,23 @@ async def main_async(
                 if _opts:
                     _login_data[_m.group(1)] = _opts[0]
 
-            await base_client.post(f"{_origin}{login_path}", data=_login_data)
+            if _login_data:
+                await base_client.post(f"{_origin}{login_path}", data=_login_data)
+            else:
+                # No HTML form found — JSON API login (Juice Shop, modern SPAs)
+                for _jbody in [
+                    {"email": username, "password": password},
+                    {"username": username, "password": password},
+                    {"user": username, "pass": password},
+                ]:
+                    try:
+                        _jr = await base_client.post(
+                            f"{_origin}{login_path}", json=_jbody
+                        )
+                        if _jr.status_code in (200, 201, 204):
+                            break
+                    except Exception:
+                        pass
 
             # Playwright's session is authoritative — it ran the real browser login
             # (including security_level=0 select). httpx login may only ADD cookies
@@ -295,6 +311,12 @@ async def main_async(
                     session_data["cookies"].append({"name": _cname, "value": _cvalue})
         except Exception as e:
             console.print(f"  [yellow]Auth failed: {e}[/yellow]")
+
+    _jwt_preview = session_data.get("jwt")
+    if _jwt_preview:
+        console.print(f"  [dim]JWT: {_jwt_preview[:40]}...[/dim]")
+    else:
+        console.print(f"  [dim]JWT: bulunamadı[/dim]")
 
     http_client = build_httpx_session(
         session_data,
