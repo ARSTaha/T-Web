@@ -149,7 +149,7 @@ Phase 0  Passive recon   151 paths probed (paths.txt + built-ins): robots.txt, .
                          CORS misconfiguration check runs here (spoofed Origin header).
 Phase 1  Active crawl    Playwright navigates pages, captures forms + XHR ghost APIs.
                          JS bundle mining extracts /api/ and /rest/ paths from .js files.
-Phase 2  Parallel attack asyncio.gather runs all 10 modules concurrently per attack point.
+Phase 2  Parallel attack asyncio.gather runs all 11 modules concurrently per attack point.
 Phase 3  Results         CORS findings prepended, all findings ranked by confidence, printed.
 ```
 
