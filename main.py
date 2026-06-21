@@ -9,6 +9,14 @@ import os
 import sys
 from pathlib import Path
 
+# Windows terminal UTF-8 fix — runs before any Rich output
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import click
 from rich.console import Console
 from urllib.parse import urlparse as _urlparse
@@ -44,7 +52,7 @@ from utils.reporter import (
 )
 from utils.waf_detect import detect_waf, get_bypass_payloads
 
-console = Console()
+console = Console(legacy_windows=False)
 
 ATTACK_MODULES = {
     "sqli": SQLiAttack,
@@ -336,7 +344,14 @@ async def main_async(
     attack_points = expanded
 
     if "jwt" in enabled_vectors and session_data.get("jwt"):
-        _jwt_test_urls = [url] + [ap["url"] for ap in recon_data["attack_points"][:5]]
+        # Ghost API'leri filtrele: SSE/WebSocket endpoint'leri bağlantıyı kapalı tutmaz
+        _SSE_SKIP = ("event", "stream", "socket", "ws", "notification", "sse", "live", "chat")
+        _ghost_urls = [
+            g["url"] for g in recon_data.get("ghost_apis", [])
+            if not any(s in g["url"].lower() for s in _SSE_SKIP)
+        ][:15]
+        _ap_urls = [ap["url"] for ap in recon_data["attack_points"][:3]]
+        _jwt_test_urls = [url] + list(dict.fromkeys(_ghost_urls + _ap_urls))
         expanded.append({
             "type": "jwt_token",
             "url": url,

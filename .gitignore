@@ -20,6 +20,7 @@ env/
 # Tool output
 tweb_report_*.json
 *.log
+*_debug.png
 
 # OS
 .DS_Store

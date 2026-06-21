@@ -8,7 +8,7 @@ import httpx
 from rich.console import Console
 from engine.flag_hunter import extract_interesting_data
 
-console = Console()
+console = Console(legacy_windows=False)
 
 
 class SessionExpiredError(Exception):

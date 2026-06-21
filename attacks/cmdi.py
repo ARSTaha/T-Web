@@ -10,7 +10,7 @@ from attacks.base import BaseAttack
 from engine.flag_hunter import has_definite_flag
 from rich.console import Console
 
-console = Console()
+console = Console(legacy_windows=False)
 
 CMDI_PARAM_HINTS = [
     "cmd", "command", "exec", "execute", "run", "shell",

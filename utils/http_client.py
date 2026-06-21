@@ -8,7 +8,7 @@ import asyncio
 import httpx
 from rich.console import Console
 
-console = Console()
+console = Console(legacy_windows=False)
 
 
 class RateLimitedClient:

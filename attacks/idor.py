@@ -8,7 +8,7 @@ from attacks.base import BaseAttack
 from engine.flag_hunter import has_definite_flag, extract_interesting_data
 from rich.console import Console
 
-console = Console()
+console = Console(legacy_windows=False)
 
 ID_PARAM_HINTS = ["id", "user_id", "uid", "account", "profile", "order",
                   "item", "document", "file_id", "record", "post", "comment",

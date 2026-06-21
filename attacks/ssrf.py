@@ -9,7 +9,7 @@ from engine.flag_hunter import has_definite_flag
 from rich.console import Console
 import asyncio
 
-console = Console()
+console = Console(legacy_windows=False)
 
 CLOUD_METADATA_URLS = [
     "http://169.254.169.254/latest/meta-data/",

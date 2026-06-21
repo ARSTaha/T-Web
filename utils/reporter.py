@@ -12,7 +12,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
-console = Console()
+console = Console(legacy_windows=False)
 
 
 def print_banner():
@@ -24,8 +24,8 @@ def print_banner():
 
 
 def print_phase(phase: int, name: str):
-    icons = {0: "🔍", 1: "🕷", 2: "⚔", 3: "🚩"}
-    icon = icons.get(phase, "▶")
+    icons = {0: ">>", 1: "~>", 2: "!!", 3: "**"}
+    icon = icons.get(phase, ">")
     console.print(f"\n[bold cyan]{icon}  Phase {phase}: {name}[/bold cyan]")
 
 
@@ -57,7 +57,7 @@ def print_findings(findings: list[dict]):
 
 def print_flag_found(flag: str, vector: str, url: str):
     console.print(Panel(
-        f"[bold green]🚩  FLAG BULUNDU![/bold green]\n\n"
+        f"[bold green]**  FLAG BULUNDU![/bold green]\n\n"
         f"[bold white]{flag}[/bold white]\n\n"
         f"[dim]Vektör: {vector} | URL: {url}[/dim]",
         border_style="green",

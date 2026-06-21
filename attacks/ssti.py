@@ -7,7 +7,7 @@ from attacks.base import BaseAttack
 from engine.flag_hunter import has_definite_flag
 from rich.console import Console
 
-console = Console()
+console = Console(legacy_windows=False)
 
 SSTI_PARAM_HINTS = [
     "name", "greeting", "message", "template", "render", "view",

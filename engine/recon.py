@@ -17,7 +17,7 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from rich.console import Console
 from engine.session_bridge import extract_session, get_init_script
 
-console = Console()
+console = Console(legacy_windows=False)
 
 PAGES_PER_CONTEXT = 20
 
@@ -252,31 +252,80 @@ async def run_recon(
         if login_url and username and password:
             try:
                 login_page = await context.new_page()
-                await _block_static(login_page)
+                # Login page'de statik engelleme yok — CSS/font bloklaması
+                # Angular Material gibi framework'lerde form render'ını bozabilir.
                 await login_page.goto(login_url, wait_until="domcontentloaded", timeout=15000)
                 # SPA'lar (Angular/React/Vue) JS bootstrap için ekstra zaman alır
                 try:
-                    await login_page.wait_for_load_state("networkidle", timeout=8000)
+                    await login_page.wait_for_load_state("networkidle", timeout=10000)
                 except Exception:
-                    await asyncio.sleep(1.5)
+                    await asyncio.sleep(2.0)
 
-                # Kullanıcı adı / email alanını doldur
+                # Sayfa üzerindeki modal/overlay/cookie banner'ları kapat
+                # Juice Shop welcome dialog gibi dialog'lar login form'unu örter.
+                for _modal_sel in [
+                    "button:has-text('Dismiss')", "button:has-text('dismiss')",
+                    "button:has-text('Close')", "button:has-text('close')",
+                    "button:has-text('Accept')", "button:has-text('OK')",
+                    "button:has-text('Got it')", "button:has-text('Me want it')",
+                    "[aria-label*='close' i]", "[aria-label*='dismiss' i]",
+                    ".modal-close", ".dialog-close", ".close-button",
+                ]:
+                    try:
+                        await login_page.click(_modal_sel, timeout=800)
+                        await asyncio.sleep(0.3)
+                    except Exception:
+                        continue
+
+                # Form render'lanana kadar bekle (visible state)
+                _email_sel_found = None
                 for sel in [
+                    "input[formcontrolname=email]", "input[formcontrolname=username]",
                     "[name=username]", "[name=email]", "[name=user]", "[name=login]",
                     "[type=email]", "[id=email]", "[id=username]",
-                    "input[formcontrolname=email]", "input[formcontrolname=username]",
                     "[type=text]",
                 ]:
                     try:
-                        await login_page.fill(sel, username, timeout=2000)
+                        await login_page.wait_for_selector(sel, state="visible", timeout=3000)
+                        _email_sel_found = sel
                         break
                     except Exception:
                         continue
 
-                # Şifre alanını doldur
-                for sel in ["[name=password]", "[name=pass]", "[name=passwd]", "[type=password]"]:
+                # Kullanıcı adı / email alanını doldur
+                # Angular Material gibi SPA framework'lerde fill() FormControl'ü güncellemez.
+                # click() + type() gerçek klavye olayları üretir; Angular change detection çalışır.
+                if _email_sel_found:
                     try:
-                        await login_page.fill(sel, password, timeout=2000)
+                        await login_page.click(_email_sel_found, timeout=3000, force=True)
+                        await login_page.fill(_email_sel_found, "", timeout=2000)
+                        await login_page.type(_email_sel_found, username, delay=30)
+                    except Exception:
+                        # Fallback: JS ile değer ata ve Angular input event'i tetikle
+                        try:
+                            _js_sel = _email_sel_found.replace("'", "\\'")
+                            await login_page.evaluate(f"""
+                                (function() {{
+                                    const el = document.querySelector('{_js_sel}');
+                                    if (!el) return;
+                                    el.value = {json.dumps(username)};
+                                    el.dispatchEvent(new Event('input', {{bubbles: true}}));
+                                    el.dispatchEvent(new Event('change', {{bubbles: true}}));
+                                }})()
+                            """)
+                        except Exception:
+                            pass
+
+                # Şifre alanını doldur
+                for sel in [
+                    "input[formcontrolname=password]",
+                    "[name=password]", "[name=pass]", "[name=passwd]",
+                    "[type=password]", "[id=password]",
+                ]:
+                    try:
+                        await login_page.click(sel, timeout=2000)
+                        await login_page.fill(sel, "", timeout=1000)
+                        await login_page.type(sel, password, delay=30)
                         break
                     except Exception:
                         continue
@@ -290,13 +339,22 @@ async def run_recon(
                     except Exception:
                         continue
 
-                # Formu gönder
-                for sel in ["[type=submit]", "[name=Login]", "[name=submit]", "button[type=submit]", "button"]:
+                # Formu gönder — Angular submit button ID önce
+                for sel in ["#loginButton", "button[type=submit]", "[type=submit]", "[name=Login]", "[name=submit]", "button"]:
                     try:
                         await login_page.click(sel, timeout=2000)
                         break
                     except Exception:
                         continue
+
+                # Login sonrası sayfanın değişmesini bekle
+                try:
+                    await login_page.wait_for_url(
+                        lambda u: "login" not in u.lower() and "signin" not in u.lower(),
+                        timeout=5000,
+                    )
+                except Exception:
+                    pass
 
                 await asyncio.sleep(2.0)
                 console.print(f"  [green]Playwright login tamamlandı[/green]")
