@@ -1,0 +1,136 @@
+# CTF-optimized path wordlist
+# Flag hedefleri
+flag
+flag.txt
+flag.php
+secret
+secret.txt
+secret.php
+hidden
+admin/flag
+admin/flag.txt
+api/flag
+api/secret
+# Admin panelleri
+admin
+admin/index
+admin/login
+admin/panel
+admin/dashboard
+admin/users
+admin/config
+dashboard
+manage
+management
+panel
+console
+manager
+superadmin
+# API endpoints
+api
+api/v1
+api/v2
+api/v3
+api/internal
+api/admin
+api/users
+api/user
+api/config
+api/info
+api/status
+graphql
+rest
+rest/api
+# Backup / kaynak
+backup
+backup.zip
+backup.tar.gz
+backup.sql
+db.sql
+database.sql
+dump.sql
+src
+source
+code
+app.zip
+www.zip
+site.zip
+# PHP dosyaları
+shell.php
+cmd.php
+exec.php
+config.php
+settings.php
+database.php
+db.php
+connect.php
+install.php
+setup.php
+update.php
+# Debug / test
+debug
+_debug
+test
+dev
+staging
+beta
+_test
+internal
+private
+# Upload
+upload
+uploads
+files
+file
+download
+export
+media
+docs
+# Git/SVN
+.svn/entries
+.svn/wc.db
+.hg/hgrc
+# Config
+config.yml
+config.yaml
+config.json
+config.xml
+settings.json
+appsettings.json
+application.properties
+# Framework-specific
+_profiler
+_profiler/phpinfo
+actuator
+actuator/env
+actuator/health
+actuator/mappings
+actuator/beans
+debug/console
+wp-login.php
+wp-admin
+xmlrpc.php
+# API docs
+api/docs
+api-docs
+swagger
+swagger.json
+swagger.yaml
+openapi.json
+openapi.yaml
+docs
+# Health/status
+status
+health
+healthcheck
+ping
+version
+info
+server-status
+# Java
+WEB-INF/web.xml
+META-INF/MANIFEST.MF
+# Misc
+crossdomain.xml
+security.txt
+.well-known/security.txt

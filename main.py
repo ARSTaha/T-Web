@@ -43,6 +43,7 @@ from attacks.idor import IDORAttack
 from attacks.nosql import NoSQLAttack
 from attacks.cmdi import CMDiAttack
 from attacks.jwt import JWTAttack
+from attacks.xxe import XXEAttack
 from skills.bridge import get_payloads
 from utils.http_client import build_client, RateLimitedClient
 from utils.oob_server import OOBServer
@@ -64,6 +65,7 @@ ATTACK_MODULES = {
     "nosql": NoSQLAttack,
     "cmdi": CMDiAttack,
     "jwt": JWTAttack,
+    "xxe": XXEAttack,
 }
 
 PASSIVE_TARGETS = [
@@ -130,7 +132,15 @@ async def run_passive_recon(base_url: str, client: RateLimitedClient) -> list[di
             pass
         return None
 
-    results = await asyncio.gather(*[probe(p) for p in PASSIVE_TARGETS])
+    _paths_file = Path(__file__).parent / "payloads" / "paths.txt"
+    _extra_paths = [
+        line.strip()
+        for line in _paths_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+        if line.strip() and not line.startswith("#")
+    ] if _paths_file.exists() else []
+    _all_targets = list(dict.fromkeys(PASSIVE_TARGETS + _extra_paths))
+
+    results = await asyncio.gather(*[probe(p) for p in _all_targets])
     return [r for r in results if r is not None]
 
 
@@ -151,6 +161,31 @@ async def try_default_creds(login_url: str, client: RateLimitedClient) -> dict |
         except Exception:
             pass
     return None
+
+
+async def _check_cors(urls: list[str], client: RateLimitedClient) -> list[dict]:
+    findings = []
+    EVIL = "https://tweb-cors-test.invalid"
+    for u in urls[:5]:
+        try:
+            resp = await client.get(u, headers={"Origin": EVIL}, timeout=5.0)
+            acao = resp.headers.get("access-control-allow-origin", "")
+            acac = resp.headers.get("access-control-allow-credentials", "").lower()
+            if acao == EVIL:
+                findings.append({
+                    "type": "cors_reflected_origin",
+                    "value": f"CORS: origin yansıtılıyor @ {u} (credentials={acac})",
+                    "confidence": 0.9 if acac == "true" else 0.6,
+                })
+            elif acao == "*" and acac == "true":
+                findings.append({
+                    "type": "cors_wildcard_credentials",
+                    "value": f"CORS: wildcard+credentials @ {u}",
+                    "confidence": 0.95,
+                })
+        except Exception:
+            pass
+    return findings
 
 
 async def main_async(
@@ -213,6 +248,15 @@ async def main_async(
 
     _parsed_url = _urlparse(url)
     _origin = f"{_parsed_url.scheme}://{_parsed_url.netloc}"
+
+    # CORS check — Phase 0 tamamlanınca, passive hits + start URL üzerinde
+    _cors_targets = [url] + [
+        f"{_origin}/{h['path']}" for h in passive_hits if h["status"] == 200
+    ]
+    _early_findings: list[dict] = await _check_cors(_cors_targets, base_client)
+    for f in _early_findings:
+        console.print(f"  [yellow][CORS][/yellow] {f['value']}")
+
     login_url = f"{_origin}{login_path}" if login_path else None
     if login_url and not username:
         console.print(f"  [dim]Default credentials deneniyor: {login_url}[/dim]")
@@ -439,6 +483,7 @@ async def main_async(
 
     # Phase 3: Results
     print_phase(3, "Sonuçlar")
+    all_findings_acc = _early_findings + all_findings_acc
     if all_findings_acc:
         seen_values: set[str] = set()
         deduped_findings = []
@@ -459,7 +504,7 @@ async def main_async(
 @click.option("-u", "--url", required=True, help="Hedef URL (örn: https://target.ctf/)")
 @click.option("--proxy", default=None, help="Burp proxy (örn: http://127.0.0.1:8080)")
 @click.option("--no-verify", is_flag=True, default=False, help="SSL cert doğrulamasını kapat")
-@click.option("--attacks", default=None, help="Virgülle ayrılmış vektörler: sqli,xss,ssrf,lfi,ssti,idor,nosql,cmdi,jwt")
+@click.option("--attacks", default=None, help="Virgülle ayrılmış vektörler: sqli,xss,ssrf,lfi,ssti,idor,nosql,cmdi,jwt,xxe")
 @click.option("--login", default=None, help="Login path (örn: /login)")
 @click.option("--user", default=None, help="Login kullanıcı adı")
 @click.option("--pass", "password", default=None, help="Login şifre")

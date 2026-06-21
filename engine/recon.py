@@ -221,6 +221,51 @@ async def _crawl_page(page: Page, url: str, target_netloc: str = "") -> dict:
     }
 
 
+async def _mine_js_endpoints(
+    js_urls: list[str],
+    base_url: str,
+    target_netloc: str,
+) -> list[dict]:
+    """Download in-scope .js files and extract validated API endpoint paths."""
+    import re as _re
+    import httpx as _httpx
+
+    PATH_RE = _re.compile(
+        r'''["'`](/(?:api|rest|graphql|v\d+)/[a-zA-Z0-9_\-/]{3,40})["'`]'''
+    )
+    found: list[dict] = []
+
+    async with _httpx.AsyncClient(timeout=8.0, follow_redirects=True, verify=False) as client:
+        for js_url in js_urls[:8]:
+            if target_netloc not in js_url:
+                continue
+            try:
+                resp = await client.get(js_url)
+                if resp.status_code != 200 or len(resp.content) > 100_000:
+                    continue
+                candidates = list(dict.fromkeys(PATH_RE.findall(resp.text)))
+                for path in candidates[:20]:
+                    full_url = urljoin(base_url, path)
+                    if any(f["url"] == full_url for f in found):
+                        continue
+                    try:
+                        head = await client.head(full_url, timeout=3.0)
+                        if head.status_code != 404:
+                            found.append({
+                                "url": full_url,
+                                "method": "GET",
+                                "post_data": None,
+                            })
+                    except Exception:
+                        pass
+                    if len(found) >= 15:
+                        return found
+            except Exception:
+                pass
+
+    return found
+
+
 async def run_recon(
     start_url: str,
     max_pages: int = 50,
@@ -606,6 +651,26 @@ async def run_recon(
 
         await context.close()
         await browser.close()
+
+    # JS endpoint mining — extract API paths from in-scope .js files
+    _js_urls: list[str] = [
+        g["url"] for g in all_ghost_apis
+        if ".js" in g["url"].split("?")[0]
+    ]
+    for _pd in all_pages_data:
+        for _src in re.findall(
+            r'<script[^>]+src=["\']([^"\']+\.js)', _pd.get("body_snippet", "")
+        ):
+            _abs = urljoin(start_url, _src)
+            if target_netloc in _abs and _abs not in _js_urls:
+                _js_urls.append(_abs)
+    if _js_urls:
+        _mined = await _mine_js_endpoints(
+            list(dict.fromkeys(_js_urls)), start_url, target_netloc
+        )
+        if _mined:
+            console.print(f"  [dim]JS madenciliği: {len(_mined)} endpoint bulundu[/dim]")
+            all_ghost_apis.extend(_mined)
 
     deduped_points = []
     seen_points = set()
