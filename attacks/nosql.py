@@ -40,6 +40,7 @@ WHERE_PAYLOADS = [
 
 class NoSQLAttack(BaseAttack):
     name = "nosql"
+    _seen_post_urls: set[str] = set()  # class-level — POST dedup across instances
 
     async def _check_response(self, response, url: str, label: str) -> tuple[list[dict], bool]:
         findings = extract_interesting_data(response.text)
@@ -70,6 +71,11 @@ class NoSQLAttack(BaseAttack):
             hint in param.lower() for hint in NOSQL_PARAM_HINTS
         )):
             return []
+
+        if method.upper() == "POST":
+            if url in NoSQLAttack._seen_post_urls:
+                return []
+            NoSQLAttack._seen_post_urls.add(url)
 
         console.print(f"  [cyan][NoSQL][/cyan] {method} {url}")
         all_findings = []
