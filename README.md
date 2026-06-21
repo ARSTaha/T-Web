@@ -130,6 +130,7 @@ python main.py -u https://target.ctf/ --rate-limit 3 --delay 0.5 --concurrency 3
 | `--login` | — | Login path (e.g. `/login`) |
 | `--user` | — | Username |
 | `--pass` | — | Password |
+| `--cookie` | — | Existing session cookie (e.g. `PHPSESSID=abc123; token=xyz`) |
 | `--proxy` | — | HTTP proxy (e.g. `http://127.0.0.1:8080`) |
 | `--no-verify` | false | Disable TLS verification |
 | `--rate-limit` | 5.0 | Max requests per second (token bucket) |

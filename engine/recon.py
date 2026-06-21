@@ -271,6 +271,7 @@ async def run_recon(
     login_url: str | None = None,
     username: str | None = None,
     password: str | None = None,
+    extra_cookies: list[dict] | None = None,
 ) -> dict:
     console.print(f"  [cyan]Hedef:[/cyan] {start_url}")
     target_netloc = _get_target_netloc(start_url)
@@ -291,6 +292,13 @@ async def run_recon(
         page_count = 0
         context = await _setup_context(browser)
         _saved_local_storage: dict = {}
+
+        if extra_cookies:
+            _cookie_domain = urlparse(start_url).hostname or "localhost"
+            await context.add_cookies([
+                {"name": c["name"], "value": c["value"], "domain": _cookie_domain, "path": "/"}
+                for c in extra_cookies
+            ])
 
         # Playwright ile login — kimlik bilgileri varsa crawl öncesi oturum aç
         if login_url and username and password:

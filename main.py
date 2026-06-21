@@ -56,6 +56,19 @@ from utils.waf_detect import detect_waf, get_bypass_payloads
 
 console = Console(legacy_windows=False)
 
+
+def _parse_cookies(cookie_str: str | None) -> list[dict]:
+    if not cookie_str:
+        return []
+    result = []
+    for part in cookie_str.split(";"):
+        part = part.strip()
+        if "=" in part:
+            name, _, value = part.partition("=")
+            result.append({"name": name.strip(), "value": value.strip()})
+    return result
+
+
 ATTACK_MODULES = {
     "sqli": SQLiAttack,
     "xss": XSSAttack,
@@ -198,19 +211,23 @@ async def main_async(
     login_path: str | None,
     username: str | None,
     password: str | None,
+    cookie: str | None,
     rate_limit: float,
     delay: float,
     concurrency: int,
     max_pages: int,
 ):
     print_banner()
+    _extra_cookies = _parse_cookies(cookie)
 
+    _extra_cookies_dict = {c["name"]: c["value"] for c in _extra_cookies}
     base_client = build_client(
         proxy=proxy,
         no_verify=no_verify,
         rate_per_sec=rate_limit,
         min_delay=delay,
         concurrency=concurrency,
+        cookies=_extra_cookies_dict or None,
     )
 
     oob = OOBServer()
@@ -273,6 +290,7 @@ async def main_async(
         login_url=recon_login_url,
         username=username,
         password=password,
+        extra_cookies=_extra_cookies,
     )
 
     console.print(
@@ -371,6 +389,11 @@ async def main_async(
         console.print(f"  [dim]JWT: {_jwt_preview[:40]}...[/dim]")
     else:
         console.print(f"  [dim]JWT: bulunamadı[/dim]")
+
+    # Manuel verilen cookie'ler — Playwright/httpx login değerlerini ezmez
+    for _c in _extra_cookies:
+        if not any(x["name"] == _c["name"] for x in session_data["cookies"]):
+            session_data["cookies"].append(_c)
 
     http_client = build_httpx_session(
         session_data,
@@ -510,13 +533,14 @@ async def main_async(
 @click.option("--login", default=None, help="Login path (örn: /login)")
 @click.option("--user", default=None, help="Login kullanıcı adı")
 @click.option("--pass", "password", default=None, help="Login şifre")
+@click.option("--cookie", default=None, help="Mevcut oturum çerezi (örn: 'PHPSESSID=abc123; token=xyz')")
 @click.option("--rate-limit", default=5.0, type=float, help="İstekler/saniye (default: 5)")
 @click.option("--delay", default=0.0, type=float, help="İstekler arası min bekleme sn (default: 0)")
 @click.option("--concurrency", default=5, type=int, help="Eş zamanlı bağlantı (default: 5)")
 @click.option("--max-pages", default=50, type=int, help="Max crawl sayfa (default: 50)")
 def cli(
     url, proxy, no_verify, attacks,
-    login, user, password, rate_limit, delay, concurrency, max_pages,
+    login, user, password, cookie, rate_limit, delay, concurrency, max_pages,
 ):
     """T-Web — CTF Web Attack Automation Tool by Tajaa"""
     if not url.startswith("http"):
@@ -532,6 +556,7 @@ def cli(
         login_path=login,
         username=user,
         password=password,
+        cookie=cookie,
         rate_limit=rate_limit,
         delay=delay,
         concurrency=concurrency,
