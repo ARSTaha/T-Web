@@ -1,6 +1,6 @@
 # T-Web
 
-CTF web challenge automation tool. Crawls targets with a real browser, maps the full attack surface, and runs 9 parallel attack modules.
+CTF web challenge automation tool. Crawls targets with a real browser, maps the full attack surface, and runs 10 parallel attack modules.
 
 Built for web-category CTF challenges where manual testing is too slow and generic scanners miss JS-heavy apps, SPA logins, and blind injection points.
 
@@ -9,7 +9,10 @@ Built for web-category CTF challenges where manual testing is too slow and gener
 ## Features
 
 - **Real browser crawler** — Playwright (Chromium) handles React/Vue/Next.js, executes JavaScript, captures XHR/fetch ghost APIs that static crawlers miss
-- **9 attack modules** — SQLi, XSS, LFI, SSTI, SSRF, IDOR, NoSQL, Command Injection, JWT attacks
+- **10 attack modules** — SQLi, XSS, LFI, SSTI, SSRF, IDOR, NoSQL, Command Injection, JWT, XXE
+- **Path brute-force** — 151 CTF-focused paths probed in Phase 0 (flag targets, admin panels, backup files, debug endpoints, framework-specific paths); soft-404 filtered
+- **JS endpoint mining** — fetches in-scope `.js` bundles and extracts `/api/`, `/rest/`, `/graphql/` paths; HEAD-validates and adds to attack surface
+- **CORS misconfiguration detection** — passive check with a spoofed origin; reports wildcard + credentials and reflected-origin patterns
 - **Session handoff** — browser login (cookies, JWT, CSRF tokens) is transferred to the HTTP client; works with OAuth2, SPA login flows, DVWA security levels
 - **OOB callback server** — embedded HTTP listener detects blind SSRF, blind CMDi, and out-of-band SQLi
 - **WAF bypass** — 5 tamper techniques (case, encoding, comment insertion) auto-applied on block
@@ -44,7 +47,7 @@ playwright install --with-deps chromium
 ## Usage
 
 ```bash
-# Full scan — all 9 modules
+# Full scan — all 10 modules
 python main.py -u https://target.ctf/
 
 # Target specific vectors
@@ -113,6 +116,7 @@ python main.py -u https://target.ctf/ --rate-limit 3 --delay 0.5 --concurrency 3
 | `nosql` | MongoDB operator injection (`$gt`, `$ne`, `$where`, `$regex`) |
 | `cmdi` | Time-based (sleep/timeout), OOB (curl/wget callback), error signature detection |
 | `jwt` | Algorithm confusion (alg:none × 3 case variants), HS256 weak secret brute-force (30 common secrets), claim-based privilege escalation |
+| `xxe` | XML External Entity file read via raw POST body (`application/xml`, `text/xml`); detects `/etc/passwd`, flag files, `/proc/self/environ` in response |
 
 ---
 
@@ -121,7 +125,7 @@ python main.py -u https://target.ctf/ --rate-limit 3 --delay 0.5 --concurrency 3
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-u` | required | Target URL |
-| `--attacks` | all | Modules: `sqli,xss,ssrf,lfi,ssti,idor,nosql,cmdi,jwt` |
+| `--attacks` | all | Modules: `sqli,xss,ssrf,lfi,ssti,idor,nosql,cmdi,jwt,xxe` |
 | `--login` | — | Login path (e.g. `/login`) |
 | `--user` | — | Username |
 | `--pass` | — | Password |
@@ -139,10 +143,13 @@ python main.py -u https://target.ctf/ --rate-limit 3 --delay 0.5 --concurrency 3
 ### Execution Flow
 
 ```
-Phase 0  Passive recon   HTTP-only: robots.txt, .git, .env, backup files, phpinfo
-Phase 1  Active crawl    Playwright navigates pages, captures forms + ghost APIs
-Phase 2  Parallel attack asyncio.gather runs all modules concurrently per attack point
-Phase 3  Results         Findings deduplicated, ranked by confidence, printed
+Phase 0  Passive recon   151 paths probed (paths.txt + built-ins): robots.txt, .git, admin panels,
+                         backup files, phpinfo, framework endpoints; soft-404 filtered.
+                         CORS misconfiguration check runs here (spoofed Origin header).
+Phase 1  Active crawl    Playwright navigates pages, captures forms + XHR ghost APIs.
+                         JS bundle mining extracts /api/ and /rest/ paths from .js files.
+Phase 2  Parallel attack asyncio.gather runs all 10 modules concurrently per attack point.
+Phase 3  Results         CORS findings prepended, all findings ranked by confidence, printed.
 ```
 
 ### Session Handoff
