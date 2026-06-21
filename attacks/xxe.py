@@ -35,6 +35,7 @@ _XML_CONTENT_TYPES = [
 
 class XXEAttack(BaseAttack):
     name = "xxe"
+    _seen_urls: set[str] = set()  # class-level — shared across all instances per process
 
     def _load_payloads(self) -> list[str]:
         if not _PAYLOAD_FILE.exists():
@@ -70,6 +71,10 @@ class XXEAttack(BaseAttack):
             return []
 
         url = attack_point["url"]
+        if url in XXEAttack._seen_urls:
+            return []
+        XXEAttack._seen_urls.add(url)
+
         method = (attack_point.get("method", "POST") or "POST").upper()
         if method == "GET":
             method = "POST"
