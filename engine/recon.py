@@ -254,10 +254,19 @@ async def run_recon(
                 login_page = await context.new_page()
                 await _block_static(login_page)
                 await login_page.goto(login_url, wait_until="domcontentloaded", timeout=15000)
-                await asyncio.sleep(1.0)
+                # SPA'lar (Angular/React/Vue) JS bootstrap için ekstra zaman alır
+                try:
+                    await login_page.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:
+                    await asyncio.sleep(1.5)
 
-                # Kullanıcı adı alanını doldur
-                for sel in ["[name=username]", "[name=email]", "[name=user]", "[name=login]", "[type=text]"]:
+                # Kullanıcı adı / email alanını doldur
+                for sel in [
+                    "[name=username]", "[name=email]", "[name=user]", "[name=login]",
+                    "[type=email]", "[id=email]", "[id=username]",
+                    "input[formcontrolname=email]", "input[formcontrolname=username]",
+                    "[type=text]",
+                ]:
                     try:
                         await login_page.fill(sel, username, timeout=2000)
                         break
@@ -528,6 +537,10 @@ async def run_recon(
 
             _sess_page.on("response", _capture_headers)
             await _sess_page.goto(start_url, wait_until="domcontentloaded", timeout=10000)
+            try:
+                await _sess_page.wait_for_load_state("networkidle", timeout=5000)
+            except Exception:
+                pass
             extracted_session = await extract_session(_sess_page, _resp_headers)
             await _sess_page.close()
         except Exception:
