@@ -104,7 +104,7 @@ class UploadAttack(BaseAttack):
         other_data = {
             k: str(v) if not isinstance(v, str) else v
             for k, v in raw_extra.items()
-            if k != file_param
+            if k != file_param and k.upper() != "MAX_FILE_SIZE"
         }
 
         base = self._base_url(url)
