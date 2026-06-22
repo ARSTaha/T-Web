@@ -81,7 +81,7 @@ class DomXSSAttack(BaseAttack):
         param = attack_point.get("param")
         method = attack_point.get("method", "GET")
 
-        if not param or method != "GET" or attack_point.get("is_header"):
+        if not param or method != "GET" or attack_point.get("input_type") == "header":
             return []
 
         url_key = f"{url}|{param}"
