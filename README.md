@@ -13,7 +13,7 @@ Built for web-category CTF challenges where manual testing is too slow and gener
 - **Path brute-force** — 151 CTF-focused paths probed in Phase 0 (flag targets, admin panels, backup files, debug endpoints, framework-specific paths); soft-404 filtered
 - **JS endpoint mining** — fetches in-scope `.js` bundles and extracts `/api/`, `/rest/`, `/graphql/` paths; HEAD-validates and adds to attack surface
 - **CORS misconfiguration detection** — passive check with a spoofed origin; reports wildcard + credentials and reflected-origin patterns
-- **Session handoff** — browser login (cookies, JWT, CSRF tokens) is transferred to the HTTP client; works with OAuth2, SPA login flows, DVWA security levels
+- **Session handoff** — browser login (cookies, JWT, CSRF tokens) is transferred to the HTTP client; works with OAuth2, SPA login flows, DVWA security levels; `--cookie` injects an existing session directly, skipping the login flow entirely
 - **OOB callback server** — embedded HTTP listener detects blind SSRF, blind CMDi, and out-of-band SQLi
 - **WAF bypass** — 5 tamper techniques (case, encoding, comment insertion) auto-applied on block
 - **Dynamic flag detection** — finds flags in JSON values, base64 blobs, HTML comments, response headers — not just `FLAG{...}` patterns
@@ -61,6 +61,9 @@ python main.py -u https://target.ctf/ --proxy http://127.0.0.1:8080 --no-verify
 
 # Slow down for sensitive/monitored CTF infra
 python main.py -u https://target.ctf/ --rate-limit 3 --delay 0.5 --concurrency 3
+
+# Inject an existing session (no login form needed)
+python main.py -u https://target.ctf/ --cookie "PHPSESSID=abc123; security=low"
 ```
 
 ---
