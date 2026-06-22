@@ -161,6 +161,8 @@ Phase 3  Results         CORS findings prepended, all findings ranked by confide
 
 After Playwright login, `session_bridge.py` extracts cookies, JWT tokens (from localStorage, sessionStorage, cookies), and CSRF tokens from the live DOM. These are transferred to an `httpx.AsyncClient`, so every attack request carries the same authenticated state the browser established — including security-level cookies (e.g. DVWA's `security=low`).
 
+If a session already exists (e.g. captured from Burp or a previous login), `--cookie "NAME=val; NAME2=val2"` injects it directly into both the Playwright browser context and the httpx client before the crawl begins. Cookies established by the login flow take priority over manually injected ones if the same name appears in both.
+
 ### Parallel Attack Model
 
 Each crawled form field and URL parameter becomes an *attack point*. All enabled modules run against all attack points concurrently via `asyncio.gather`. Time-based modules (SQLi, CMDi) use `asyncio.Semaphore(1)` to serialize sleep payloads — preventing parallel sleeps from inflating each other's timing measurements.
