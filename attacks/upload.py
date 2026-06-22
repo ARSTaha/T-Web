@@ -6,6 +6,7 @@ RCE confirmed with unique marker — no finding reported without confirmed execu
 from __future__ import annotations
 import re
 from urllib.parse import urlparse, urljoin
+from uuid import uuid4
 
 from attacks.base import BaseAttack, SessionExpiredError
 from engine.flag_hunter import extract_interesting_data, has_definite_flag
@@ -110,7 +111,15 @@ class UploadAttack(BaseAttack):
         base = self._base_url(url)
         console.print(f"  [cyan][Upload][/cyan] POST {url} ?{file_param}")
 
-        for fname, ct, content in BYPASS_PAYLOADS:
+        # Unique prefix per attack_point — prevents cross-endpoint false positives
+        # when a previously uploaded file persists on the server.
+        _uid = uuid4().hex[:6]
+        local_payloads = [
+            (fname.replace("tweb", f"tweb{_uid}", 1), ct, content)
+            for fname, ct, content in BYPASS_PAYLOADS
+        ]
+
+        for fname, ct, content in local_payloads:
             if self._should_stop():
                 return []
 
