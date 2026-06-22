@@ -20,6 +20,7 @@ GRAPHQL_PATHS = [
     "/api/query",
     "/gql",
     "/graphql/console",
+    "/api",
 ]
 
 _INTROSPECTION = {
