@@ -78,7 +78,12 @@ class UploadAttack(BaseAttack):
         except Exception:
             return False, []
 
-        if resp is None or _MARKER not in (resp.text or ""):
+        body = resp.text or ""
+        if _MARKER not in body:
+            return False, []
+        # PHP executed: marker appears in output. PHP not executed: file is served
+        # as raw text and the source line `echo 'TWEB_RCE_PROBE'` contains the marker.
+        if f"echo '{_MARKER}'" in body:
             return False, []
 
         console.print(f"  [bold red][Upload][/bold red] RCE! {file_url}")
@@ -140,8 +145,10 @@ class UploadAttack(BaseAttack):
 
             body = resp.text or ""
 
-            # Check if server executed the shell inline (some CTF apps echo file content)
-            if _MARKER in body:
+            # Check if server executed the shell inline (some CTF apps echo file content).
+            # Guard: if the server echoed back raw PHP source, the marker appears
+            # in the echo statement itself — not as executed output.
+            if _MARKER in body and f"echo '{_MARKER}'" not in body:
                 console.print(f"  [bold red][Upload][/bold red] RCE (inline)! {fname} @ {url}")
                 findings: list[dict] = [{
                     "type": "upload_rce",
