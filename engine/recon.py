@@ -206,9 +206,22 @@ async def _crawl_page(page: Page, url: str, target_netloc: str = "") -> dict:
         forms = []
 
     try:
-        links = await page.eval_on_selector_all(
-            "a[href]", "els => els.map(e => e.href)"
-        )
+        links = await page.evaluate("""() => {
+            const LOGOUT_WORDS = [
+                'logout','log out','log-out','sign out','sign-out','signout',
+                'logoff','log off','log-off','exit','quit','bye','disconnect',
+                'deauth','end session','close session',
+                'çıkış','çık','oturumu kapat','kapat',
+                'sortir','déconnexion','déconnexion','salir','cerrar sesión',
+                'abmelden','ausloggen','keluar','uitloggen'
+            ];
+            return Array.from(document.querySelectorAll('a[href]'))
+                .filter(a => {
+                    const t = (a.textContent || '').trim().toLowerCase();
+                    return !LOGOUT_WORDS.some(w => t === w || t.includes(w));
+                })
+                .map(a => a.href);
+        }""")
     except Exception:
         links = []
 

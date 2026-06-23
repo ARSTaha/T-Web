@@ -47,7 +47,7 @@ UPLOAD_PATHS = [
 ]
 
 _PATH_IN_BODY = re.compile(
-    r'(?:["\'\s>:,(]|^)(/[/a-zA-Z0-9_.~-]{1,80}\.(php[0-9a-zA-Z]*|phtml|phar))(?:["\'\s<:,);]|$)',
+    r'(?:["\'\s>:,(]|^)(\.{0,2}/[/a-zA-Z0-9_.~-]{1,80}\.(php[0-9a-zA-Z]*|phtml|phar)|[a-zA-Z0-9_][/a-zA-Z0-9_.~-]{1,80}\.(php[0-9a-zA-Z]*|phtml|phar))(?:["\'\s<:,);]|$)',
     re.MULTILINE,
 )
 
