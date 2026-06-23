@@ -107,7 +107,11 @@ class SSRFAttack(BaseAttack):
                 break
             response, findings = await self._try_payload(method, url, param, internal_url)
             if response and _differs_from_baseline(response.text):
-                console.print(f"  [yellow][SSRF][/yellow] Internal service response: {internal_url}")
+                _preview = response.text[:200].strip().replace("\n", " ")
+                console.print(
+                    f"  [yellow][SSRF][/yellow] Internal service response: {internal_url}"
+                    + (f" | preview: {_preview!r}" if _preview else "")
+                )
                 findings.append({
                     "type": "ssrf_internal_service",
                     "value": f"Internal SSRF @ {internal_url}: {response.text[:200]}",

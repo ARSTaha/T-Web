@@ -110,9 +110,11 @@ class XXEAttack(BaseAttack):
                 body = resp.text
                 sig = self._has_file_read(body)
                 if sig:
+                    _preview = body[:400].strip().replace("\n", "\\n")
                     console.print(
                         f"  [bold red][XXE][/bold red] Dosya okuma! "
-                        f"({ct}) imza={sig!r} @ {url}"
+                        f"({ct}) imza={sig!r} @ {url}\n"
+                        f"  [dim]  {_preview}[/dim]"
                     )
                     all_findings.append({
                         "type": "xxe_file_read",

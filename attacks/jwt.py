@@ -258,7 +258,13 @@ class JWTAttack(BaseAttack):
         header, payload, _ = parsed
         alg = header.get("alg", "?")
         sub = payload.get("sub") or payload.get("user") or payload.get("username", "?")
-        console.print(f"  [cyan][JWT][/cyan] Token: alg={alg} sub={sub!r}")
+        _interesting_claims = {
+            k: v for k, v in payload.items()
+            if k not in ("iat", "exp", "nbf", "jti", "iss", "aud")
+        }
+        console.print(
+            f"  [cyan][JWT][/cyan] Token: alg={alg} sub={sub!r} | claims: {_interesting_claims}"
+        )
 
         # Step 0: Find a URL that actually enforces auth
         protected = await self._find_protected_url(test_urls, jwt_value, cookie_name)

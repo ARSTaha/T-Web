@@ -122,7 +122,13 @@ class SQLiAttack(BaseAttack):
 
             if is_error_based and not error_confirmed:
                 error_confirmed = True
-                console.print(f"  [bold red][SQLi][/bold red] Error-based hit! Payload: {payload!r}")
+                _matched_sig = next((s for s in ERROR_SIGNATURES if s in body_lower), "")
+                _idx = body_lower.find(_matched_sig)
+                _err_ctx = response.text[max(0, _idx - 20):_idx + 120].strip() if _idx >= 0 else ""
+                console.print(
+                    f"  [bold red][SQLi][/bold red] Error-based hit! Payload: {payload!r}"
+                    + (f"\n  [dim]  error: {_err_ctx!r}[/dim]" if _err_ctx else "")
+                )
                 all_findings.append({
                     "type": "sqli_error",
                     "value": f"Error-based SQLi @ {url} {location} payload={payload!r}",

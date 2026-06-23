@@ -124,8 +124,10 @@ class GraphQLAttack(BaseAttack):
 
             body_lower = (ir.text or "").lower()
             if any(f in body_lower for f in _SENSITIVE_FIELDS):
+                _data_preview = (ir.text or "")[:250].strip().replace("\n", " ")
                 console.print(
                     f"  [bold red][GraphQL][/bold red] Data leak in query response!"
+                    f"\n  [dim]  {_data_preview}[/dim]"
                 )
                 findings.append({
                     "type": "graphql_data_leak",

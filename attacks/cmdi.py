@@ -155,8 +155,12 @@ class CMDiAttack(BaseAttack):
 
                 body_lower = response.text.lower()
                 if any(sig in body_lower for sig in ERROR_SIGNATURES):
+                    _matched = next((s for s in ERROR_SIGNATURES if s in body_lower), "")
+                    _idx = body_lower.find(_matched)
+                    _err_ctx = response.text[max(0, _idx - 10):_idx + 100].strip() if _idx >= 0 else ""
                     console.print(
                         f"  [bold red][CMDi][/bold red] Error-based hit! Payload: {payload!r}"
+                        + (f"\n  [dim]  error: {_err_ctx!r}[/dim]" if _err_ctx else "")
                     )
                     all_findings.append({
                         "type": "cmdi_error",

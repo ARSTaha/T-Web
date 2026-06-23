@@ -95,9 +95,10 @@ class IDORAttack(BaseAttack):
                     findings = extract_interesting_data(response.text)
                     flag = has_definite_flag(findings)
 
+                    _preview = response.text[:150].strip().replace("\n", " ")
                     console.print(
-                        f"  [yellow][IDOR][/yellow] Different response for ID={test_id}: "
-                        f"{len(response.text)} chars"
+                        f"  [yellow][IDOR][/yellow] Different response for ID={test_id} "
+                        f"({len(response.text)}B) | preview: {_preview!r}"
                     )
                     # Only add the IDOR finding, not the IP/comment noise from extract_interesting_data
                     all_findings.append({
