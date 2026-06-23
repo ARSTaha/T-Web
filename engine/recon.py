@@ -46,6 +46,14 @@ DANGEROUS_PATH_PATTERNS = [
     "/account/delete", "/profile/delete",
 ]
 
+# Keywords checked against the filename stem (e.g. "sessiondestroy" in "sessiondestroy.php")
+# Catches compound names like sessiondestroy.php, do_logout.php, user_exit.php
+_DANGEROUS_STEM_KEYWORDS = [
+    "logout", "signout", "logoff", "sign_out", "log_out",
+    "destroy", "deauth", "exit", "bye",
+    "delete_account", "remove_account",
+]
+
 # Ghost API URLs that are transport/infrastructure — not web app endpoints
 SKIP_API_URL_PATTERNS = [
     "/socket.io/",
@@ -107,6 +115,10 @@ def _is_safe_url(url: str) -> bool:
     parsed = urlparse(url)
     path = parsed.path.lower()
     if any(pattern in path for pattern in DANGEROUS_PATH_PATTERNS):
+        return False
+    # Catch compound filenames like sessiondestroy.php, do_logout.php
+    stem = path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    if any(kw in stem for kw in _DANGEROUS_STEM_KEYWORDS):
         return False
     # Skip URLs whose query string contains state-changing params (e.g. phpids=on).
     query_keys = set(parse_qs(parsed.query).keys())
