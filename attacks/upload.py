@@ -184,10 +184,15 @@ class UploadAttack(BaseAttack):
             candidates: list[str] = []
             for p in response_paths:
                 candidates.append(urljoin(base, p))
+            # Try upload paths relative to the form's own directory (e.g. /adminpanel/uploads/)
+            _url_dir = "/".join(urlparse(url).path.split("/")[:-1])
+            for upath in UPLOAD_PATHS:
+                candidates.append(f"{base}{_url_dir}{upath}{fname}")
+            # Absolute paths from root as fallback
             for upath in UPLOAD_PATHS:
                 candidates.append(urljoin(base, upath + fname))
 
-            for file_url in candidates[:18]:
+            for file_url in candidates[:40]:
                 if self._should_stop():
                     return []
                 rce, findings = await self._check_exec(file_url)
