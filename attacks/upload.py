@@ -97,6 +97,7 @@ class UploadAttack(BaseAttack):
             base + dir_path + "manage_products.php",
             base + dir_path + "dashboard.php",
         ]
+        _skip_ext = (".css", ".js", ".ico", ".woff", ".ttf", ".svg", ".map")
         found: list[str] = []
         for lurl in listing_urls:
             try:
@@ -106,15 +107,18 @@ class UploadAttack(BaseAttack):
             except Exception:
                 continue
             if not resp or resp.status_code != 200:
+                console.print(f"  [dim][Upload] listing {lurl} → {resp.status_code if resp else 'err'}[/dim]")
                 continue
-            for m in _SRC_RE.finditer(resp.text or ""):
-                p = m.group(1)
-                if p.startswith(("data:", "#", "javascript:")):
-                    continue
-                if any(d in p.lower() for d in _UPLOAD_HINT_DIRS):
-                    if not p.startswith(("http://", "https://")):
-                        p = "/" + p.lstrip("/")
-                    found.append(p)
+            all_srcs = [
+                m.group(1) for m in _SRC_RE.finditer(resp.text or "")
+                if not m.group(1).startswith(("data:", "#", "javascript:"))
+                and not any(m.group(1).lower().endswith(e) for e in _skip_ext)
+            ]
+            console.print(f"  [dim][Upload] listing {lurl} → 200 | srcs={all_srcs[:10]}[/dim]")
+            for p in all_srcs:
+                if not p.startswith(("http://", "https://")):
+                    p = "/" + p.lstrip("/")
+                found.append(p)
         return list(dict.fromkeys(found))
 
     async def _check_exec(self, file_url: str, debug: bool = False) -> tuple[bool, list[dict]]:
