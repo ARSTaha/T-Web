@@ -47,7 +47,8 @@ UPLOAD_PATHS = [
 ]
 
 _PATH_IN_BODY = re.compile(
-    r'["\'/]([/a-zA-Z0-9_.~-]{2,60}\.(php[0-9a-zA-Z]*|phtml|phar))["\'/]'
+    r'(?:["\'\s>:,(]|^)(/[/a-zA-Z0-9_.~-]{1,80}\.(php[0-9a-zA-Z]*|phtml|phar))(?:["\'\s<:,);]|$)',
+    re.MULTILINE,
 )
 
 
@@ -58,13 +59,25 @@ class UploadAttack(BaseAttack):
     def _is_relevant(self, attack_point: dict) -> bool:
         return attack_point.get("input_type") == "file"
 
-    def _find_path_in_response(self, body: str, filename: str) -> str | None:
+    def _find_paths_in_response(self, body: str, filename: str) -> list[str]:
         stem = filename.rsplit(".", 1)[0]
+        _upload_dirs = ("upload", "file", "image", "img", "media", "asset", "static", "content")
+        exact: list[str] = []
+        fallback: list[str] = []
         for m in _PATH_IN_BODY.finditer(body):
-            path = m.group(1)
+            path = "/" + m.group(1).lstrip("/")
             if stem in path or filename in path:
-                return "/" + path.lstrip("/")
-        return None
+                exact.append(path)
+            elif any(d in path.lower() for d in _upload_dirs):
+                fallback.append(path)
+        # Exact matches first, then upload-dir candidates (server renamed the file)
+        seen: set[str] = set()
+        result: list[str] = []
+        for p in exact + fallback:
+            if p not in seen:
+                seen.add(p)
+                result.append(p)
+        return result
 
     def _base_url(self, url: str) -> str:
         p = urlparse(url)
@@ -162,9 +175,8 @@ class UploadAttack(BaseAttack):
 
             # Build candidate URLs for the uploaded file
             candidates: list[str] = []
-            extracted = self._find_path_in_response(body, fname)
-            if extracted:
-                candidates.append(urljoin(base, extracted))
+            for p in self._find_paths_in_response(body, fname):
+                candidates.append(urljoin(base, p))
             for upath in UPLOAD_PATHS:
                 candidates.append(urljoin(base, upath + fname))
 
