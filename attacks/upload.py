@@ -123,7 +123,11 @@ class UploadAttack(BaseAttack):
             ]
             console.print(f"  [dim][Upload] listing {lurl} → 200 | srcs={all_srcs[:10]}[/dim]")
             for p in all_srcs:
-                if any(d in p.lower() for d in _UPLOAD_HINT_DIRS):
+                # Match only the directory portion — not the filename.
+                # e.g. "add_product.php" has no dir → skip; "/uploads/img.jpg" → dir="/uploads" → match.
+                parts = p.replace("\\", "/").split("/")
+                dir_part = "/".join(parts[:-1]).lower()
+                if any(d in dir_part for d in _UPLOAD_HINT_DIRS):
                     if not p.startswith(("http://", "https://")):
                         p = "/" + p.lstrip("/")
                     found.append(p)
