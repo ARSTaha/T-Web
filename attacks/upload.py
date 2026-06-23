@@ -154,6 +154,7 @@ class UploadAttack(BaseAttack):
                 continue
 
             if resp is None or resp.status_code not in (200, 201, 302):
+                console.print(f"  [dim][Upload] {fname} → HTTP {resp.status_code if resp else 'None'}, atlandı[/dim]")
                 continue
 
             body = resp.text or ""
@@ -174,8 +175,14 @@ class UploadAttack(BaseAttack):
                 return findings
 
             # Build candidate URLs for the uploaded file
+            response_paths = self._find_paths_in_response(body, fname)
+            console.print(
+                f"  [dim][Upload] {fname} → HTTP {resp.status_code}"
+                f" | response_paths={response_paths}"
+                f" | body_snippet={body[:120]!r}[/dim]"
+            )
             candidates: list[str] = []
-            for p in self._find_paths_in_response(body, fname):
+            for p in response_paths:
                 candidates.append(urljoin(base, p))
             for upath in UPLOAD_PATHS:
                 candidates.append(urljoin(base, upath + fname))
