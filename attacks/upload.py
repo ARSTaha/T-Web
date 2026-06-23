@@ -121,7 +121,7 @@ class UploadAttack(BaseAttack):
         file_param = attack_point.get("param") or "file"
         raw_extra = attack_point.get("extra_data") or {}
         other_data = {
-            k: str(v) if not isinstance(v, str) else v
+            k: (str(v) or "1") if not isinstance(v, str) else (v or "1")
             for k, v in raw_extra.items()
             if k != file_param and k.upper() != "MAX_FILE_SIZE"
         }
