@@ -85,6 +85,38 @@ class UploadAttack(BaseAttack):
         p = urlparse(url)
         return f"{p.scheme}://{p.netloc}"
 
+    async def _mine_listing_for_upload(self, upload_url: str, base: str) -> list[str]:
+        """Fetch the admin listing page after a successful upload to find the renamed file path."""
+        parsed = urlparse(upload_url)
+        dir_path = "/".join(parsed.path.split("/")[:-1]) + "/"
+        listing_urls = [
+            base + dir_path,
+            base + dir_path + "index.php",
+            base + dir_path + "products.php",
+            base + dir_path + "list.php",
+            base + dir_path + "manage_products.php",
+            base + dir_path + "dashboard.php",
+        ]
+        found: list[str] = []
+        for lurl in listing_urls:
+            try:
+                resp = await self.session.get(lurl, timeout=10.0)
+            except SessionExpiredError:
+                raise
+            except Exception:
+                continue
+            if not resp or resp.status_code != 200:
+                continue
+            for m in _SRC_RE.finditer(resp.text or ""):
+                p = m.group(1)
+                if p.startswith(("data:", "#", "javascript:")):
+                    continue
+                if any(d in p.lower() for d in _UPLOAD_HINT_DIRS):
+                    if not p.startswith(("http://", "https://")):
+                        p = "/" + p.lstrip("/")
+                    found.append(p)
+        return list(dict.fromkeys(found))
+
     async def _check_exec(self, file_url: str, debug: bool = False) -> tuple[bool, list[dict]]:
         try:
             resp = await self.session.get(file_url, timeout=10.0)
@@ -201,6 +233,12 @@ class UploadAttack(BaseAttack):
                             candidates.insert(0, urljoin(base, p))
                         else:
                             candidates.insert(0, p)
+                # Fetch admin listing page — server may have renamed the file
+                listing_paths = await self._mine_listing_for_upload(url, base)
+                for p in listing_paths:
+                    candidates.insert(0, urljoin(base, p))
+                if listing_paths:
+                    console.print(f"  [dim][Upload] listing page: {listing_paths[:5]}[/dim]")
             # Try upload paths relative to the form's own directory (e.g. /adminpanel/uploads/)
             _url_dir = "/".join(urlparse(url).path.split("/")[:-1])
             for upath in UPLOAD_PATHS:
