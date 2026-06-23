@@ -275,6 +275,13 @@ If the browser process dies mid-scan, `_get_browser()` detects the disconnected 
 
 ## Troubleshooting
 
+**`Executable doesn't exist` / `playwright install` error on first run**
+Playwright was installed but the browser binaries were not downloaded. Run:
+```bash
+playwright install --with-deps chromium
+```
+This is a one-time step after `pip install -r requirements.txt`. If you installed inside a venv, make sure the venv is active when you run the command.
+
 **OOB callbacks not arriving**
 The OOB server needs a routable IP. Check with `ip a` — if your interface is `127.x.x.x` only, connect to the CTF VPN first. On HTB/THM this is `tun0`.
 
