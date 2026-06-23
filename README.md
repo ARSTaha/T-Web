@@ -163,10 +163,10 @@ Blind SQLi, blind SSRF, and blind CMDi are reported only when the OOB callback s
 | `ssrf` | OOB callback received, internal IP in response, cloud metadata | 85–90% |
 | `idor` | Numeric ID swap yields different user data (content + size diff ≥ 20%) | 70% |
 | `nosql` | `$gt`, `$ne`, `$where` operators bypass auth or return extra records | 80% |
-| `cmdi` | Time delay ≥ 2.8s over baseline, OOB curl/wget callback | 85% |
+| `cmdi` | Time delay ≥ 2.8s over baseline, OOB curl/wget callback, shell error output | 85% time/OOB, 75% error |
 | `jwt` | alg:none → 200, weak secret verified, RS256→HS256 PEM confusion → 200 | 95% confusion, 90% weak secret |
 | `xxe` | File content (`/etc/passwd`, flag file) in XML response | 90% |
-| `upload` | Uploaded file executes unique marker payload (RCE confirmed) | 95% |
+| `upload` | Uploaded file executes unique marker payload (RCE confirmed); bypass confirmed but PHP blocked | 95% RCE, 55% bypass-no-rce |
 | `open_redirect` | `Location: https://evil.com` in 3xx response | 85% header, 65% body |
 | `proto_pollution` | UUID probe value reflected back in response body | 85% reflected, 65% crash |
 | `graphql` | `__schema` in response, sensitive field names in schema, data returned | 75% introspection, 85% info leak |
@@ -295,7 +295,7 @@ T-Web applies 5 tamper strategies automatically on 403 responses. If all are blo
 Ensure the target exposes a JWKS endpoint. T-Web checks 7 common paths. If none return a valid JWK, the attack is skipped. Use Burp to find the actual JWKS URL and probe it manually.
 
 **Upload module: no RCE finding despite 200 response**
-The module only reports after the uploaded file executes a unique marker. If the server saves the file but the upload directory is not web-accessible, execution confirmation fails and no finding is generated — correct behavior, not a bug.
+The module confirms RCE only when the uploaded file executes a unique marker. If the server saves the file but PHP execution is blocked or the directory is not web-accessible, a `upload_bypass_no_rce` finding (55% confidence) is reported instead — including which payload bypassed the filter. Use that to manually locate the file in the admin panel.
 
 ---
 

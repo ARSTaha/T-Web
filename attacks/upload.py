@@ -230,6 +230,11 @@ class UploadAttack(BaseAttack):
                 any_upload_ok = True
                 successful_payloads.append(f"{fname} ({ct})")
             response_paths = self._find_paths_in_response(body, fname)
+            # Path in response means server accepted the file — track as bypass
+            # even when the success message is in a different language.
+            if response_paths and not upload_ok:
+                any_upload_ok = True
+                successful_payloads.append(f"{fname} ({ct}) [path in response: {response_paths[0]}]")
             if upload_ok or response_paths:
                 console.print(
                     f"  [dim][Upload] {fname} → ok={upload_ok} | response_paths={response_paths}"
